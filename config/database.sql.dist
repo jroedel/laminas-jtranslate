@@ -1,0 +1,67 @@
+--
+-- Table structure for table `trans_phrases`
+--
+
+CREATE TABLE IF NOT EXISTS `trans_phrases` (
+  `translation_phrase_id` int(11) NOT NULL,
+  `project` varchar(50) NOT NULL,
+  `text_domain` varchar(50) NOT NULL,
+  `phrase` varchar(2000) NOT NULL,
+  `added_on` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `trans_translations`
+--
+
+CREATE TABLE IF NOT EXISTS `trans_translations` (
+  `translation_id` int(8) NOT NULL,
+  `translation_phrase_id` int(11) NOT NULL,
+  `locale` varchar(20) NOT NULL,
+  `translation` varchar(2000) NOT NULL,
+  `modified_by` varchar(70) NOT NULL,
+  `modified_on` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `trans_phrases`
+--
+ALTER TABLE `trans_phrases`
+  ADD PRIMARY KEY (`translation_phrase_id`);
+
+--
+-- Indexes for table `trans_translations`
+--
+ALTER TABLE `trans_translations`
+  ADD PRIMARY KEY (`translation_id`),
+  ADD UNIQUE KEY `translation_phrase_id` (`translation_phrase_id`,`locale`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `trans_phrases`
+--
+ALTER TABLE `trans_phrases`
+  MODIFY `translation_phrase_id` int(11) NOT NULL AUTO_INCREMENT;
+--
+-- AUTO_INCREMENT for table `trans_translations`
+--
+ALTER TABLE `trans_translations`
+  MODIFY `translation_id` int(8) NOT NULL AUTO_INCREMENT;
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `trans_translations`
+--
+ALTER TABLE `trans_translations`
+  ADD CONSTRAINT `trans_translations_ibfk_1` FOREIGN KEY (`translation_phrase_id`) REFERENCES `trans_phrases` (`translation_phrase_id`) ON DELETE CASCADE ON UPDATE CASCADE;

@@ -1,0 +1,20 @@
+<?php
+$entity = $this->phrase;
+$headText = 'Edit Translation';
+$this->headTitle($headText); ?>
+<h1><?php echo $this->translate($headText);?></h1>
+<?php $form = $this->form;
+$form->setAttribute('action', $this->url('jtranslation/phrase', 
+		array('action' => 'edit', 'phrase_id' => $this->phraseId)));
+ $form->prepare();
+ echo $this->form()->openTag($form); 
+ echo $this->formHidden($form->get('phraseId'));
+ echo $this->formRow($form->get('phrase'));
+ foreach ($this->locales as $key => $value) {
+    echo $this->formRow($form->get($key));
+    echo $this->formHidden($form->get($key.'Id'));
+ }
+ echo $this->formRow($form->get('security'));
+ echo $this->formRow($form->get('submit'));
+ echo $this->form()->closeTag();
+?>

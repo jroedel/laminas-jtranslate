@@ -1,0 +1,31 @@
+{
+    "name": "jroedel/zf2-jtranslate",
+    "type": "library",
+    "description": "Zend Framework 2 module to provide a translation GUI",
+    "keywords": ["Zend Framework 2","translation", "gui"],
+    "homepage": "https://github.com/jroedel/zf2-jtranslate",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "jroedel",
+            "homepage": "https://github.com/jroedel",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/jroedel/zf2-jtranslate/issues"
+    },
+    "minimum-stability" : "stable",
+    "require": {
+        "php": ">=5.3.3",
+        "zendframework/zendframework": "2.*@stable",
+		"cakephp/utility": "3.2.*",
+        "mledoze/countries": "dev-master"
+    },
+    "autoload": {
+        "psr-0": {
+            "JTranslate": "src"
+        },
+        "classmap" : ["Module.php"]
+    }
+}
