@@ -1,21 +1,21 @@
 <?php
-namespace JTranslation\Controller;
+namespace JTranslate\Controller;
 
 use Zend\Mvc\Controller\AbstractActionController;
 use Zend\View\Model\ViewModel;
 use Zend\Mvc\Controller\Plugin\FlashMessenger;
-use JTranslation\Model\TranslationsTable;
+use JTranslate\Model\TranslationsTable;
 
 /**
  *
  * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
-class JTranslationController extends AbstractActionController
+class JTranslateController extends AbstractActionController
 {
     public function indexAction()
     {
-        /** @var \JTranslation\Model\TranslationsTable $table */
-        $table = $this->getServiceLocator()->get('JTranslation\Model\TranslationsTable');
+        /** @var \JTranslate\Model\TranslationsTable $table */
+        $table = $this->getServiceLocator()->get('JTranslate\Model\TranslationsTable');
         $showAll = $this->params()->fromQuery('showAll') == "true";
         $translations = $table->getTranslations();
         $locales = $table->getLocales();
@@ -29,21 +29,21 @@ class JTranslationController extends AbstractActionController
     public function editAction() {
         $sm = $this->getServiceLocator ();
         /** @var TranslationsTable $table **/
-        $table = $sm->get ( 'JTranslation\Model\TranslationsTable' );
+        $table = $sm->get ( 'JTranslate\Model\TranslationsTable' );
         $id = ( int ) $this->params ()->fromRoute ( 'phrase_id' );
         if (! $id) {
             $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Phrase not found.' );
-            return $this->redirect ()->toRoute ( 'jtranslation', array (
+            return $this->redirect ()->toRoute ( 'jtranslate', array (
                 'action' => 'index'
             ) );
         }
         $phrase = $table->getPhrase ( $id );
         if (! $phrase) {
             $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Phrase not found.' );
-            return $this->redirect ()->toRoute ( 'jtranslation' );
+            return $this->redirect ()->toRoute ( 'jtranslate' );
         }
         $locales = $table->getLocales(true);
-        $form = $sm->get('JTranslation\Form\EditPhraseForm');
+        $form = $sm->get('JTranslate\Form\EditPhraseForm');
         
         $request = $this->getRequest ();
         if ($request->isPost ()) {
@@ -64,7 +64,7 @@ class JTranslationController extends AbstractActionController
                     //update the translation files
                     $table->writePhpTranslationArrays();
                     $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_SUCCESS )->addMessage ( 'Translations successfully updated.' );
-                    $this->redirect ()->toUrl ( $this->url ()->fromRoute ( 'jtranslation' ) );
+                    $this->redirect ()->toUrl ( $this->url ()->fromRoute ( 'jtranslate' ) );
                 } catch (\Exception $e) {
                     $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Error in form submission, please review.' );
                 }

@@ -7,12 +7,12 @@
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
-namespace JTranslation\View\Helper\Service;
+namespace JTranslate\View\Helper\Service;
 
 use Zend\ServiceManager\FactoryInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 use Zend\View\Helper\FlashMessenger;
-use JTranslation\View\Helper\NowMessenger;
+use JTranslate\View\Helper\NowMessenger;
 
 class NowMessengerFactory implements FactoryInterface
 {

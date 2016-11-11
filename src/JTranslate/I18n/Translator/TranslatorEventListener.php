@@ -1,10 +1,10 @@
 <?php
-namespace JTranslation\I18n\Translator;
+namespace JTranslate\I18n\Translator;
 use Zend\EventManager\AbstractListenerAggregate;
 use Zend\EventManager\Event;
 use Zend\EventManager\EventManagerInterface;
 use Zend\I18n\Translator\Translator;
-use JTranslation\Model\TranslationsTable;
+use JTranslate\Model\TranslationsTable;
 class TranslatorEventListener extends AbstractListenerAggregate
 {
     /** @var TranslationsTable $table **/

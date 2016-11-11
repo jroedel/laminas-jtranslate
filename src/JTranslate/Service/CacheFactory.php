@@ -6,7 +6,7 @@
  * @license http://framework.zend.com/license/new-bsd New BSD License
  */
 
-namespace JTranslation\Service;
+namespace JTranslate\Service;
 
 use Zend\Cache\Storage\StorageInterface;
 use Zend\Cache\StorageFactory;
@@ -28,7 +28,7 @@ class CacheFactory implements FactoryInterface
      */
     public function createService(ServiceLocatorInterface $serviceLocator)
     {
-        $options = $serviceLocator->get('JTranslation\Config');
+        $options = $serviceLocator->get('JTranslate\Config');
 
         return StorageFactory::factory($options['cache_options']);
     }

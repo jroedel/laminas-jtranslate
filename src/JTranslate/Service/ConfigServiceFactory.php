@@ -6,13 +6,13 @@
  * @license http://framework.zend.com/license/new-bsd New BSD License
  */
 
-namespace JTranslation\Service;
+namespace JTranslate\Service;
 
 use Zend\ServiceManager\FactoryInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 
 /**
- * Factory responsible of retrieving an array containing the BjyAuthorize configuration
+ * Factory responsible of retrieving an array containing the jtranslate configuration
  *
  * @author Marco Pivetta <ocramius@gmail.com>
  */
@@ -27,6 +27,6 @@ class ConfigServiceFactory implements FactoryInterface
     {
         $config = $serviceLocator->get('Config');
         
-        return $config['jtranslation'];
+        return $config['jtranslate'];
     }
 }

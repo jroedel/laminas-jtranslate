@@ -4,7 +4,7 @@ Zend Framework 2 module to provide a translation GUI. Uses Zend\Db. All unknown 
 This repository is used in a production website, but is far from perfect. Any help to make it more useful for the world is more than welcome!
 
 ##Installation
-1. Require jtranslation
+1. Require JTranslate
 ```
 ./composer.phar require jroedel/jtranslate
 ```
@@ -19,7 +19,7 @@ This repository is used in a production website, but is far from perfect. Any he
 return [
     'modules' => [
         // ...
-        'JTranslation',
+        JTranslaten',
     ],
     // ...
 ];

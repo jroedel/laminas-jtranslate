@@ -7,9 +7,9 @@
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
-namespace JTranslation\View\Helper;
+namespace JTranslate\View\Helper;
 
-use JTranslation\Controller\Plugin\NowMessenger as PluginNowMessenger;
+use JTranslate\Controller\Plugin\NowMessenger as PluginNowMessenger;
 use Zend\ServiceManager\ServiceLocatorAwareInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 use Zend\I18n\View\Helper\AbstractTranslatorHelper;
