@@ -26,4 +26,12 @@ This repository is used in a production website, but is far from perfect. Any he
     ];
     ```
 
-5. The GUI can be accessed from `/translations`.
+5. The GUI can be accessed from `/translations`. Make sure to only allow administers to access the `jtranslation` and child routes. [bjyoungblood/BjyAuthorize](https://github.com/bjyoungblood/BjyAuthorize) is a great module for route-based access control.
+
+## How it works
+
+1. Untranslated phrases are collected in the TranslationsTable by listening to the `EVENT_MISSING_TRANSLATION` event of the Translator.
+
+2. At the `MvcEvent::EVENT_FINISH` event, we add any new phrases to the database.
+
+3. When a user edits a phrase from the `/translations` page, all translations from that module are written to phpArrays in the `/language` folder of the corresponding module. NOTE: Never manually edit a translations php file, as it would be overwritten from the database. If manual changes must be made, make them from the database.
