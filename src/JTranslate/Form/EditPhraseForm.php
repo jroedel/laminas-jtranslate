@@ -1,5 +1,5 @@
 <?php
-namespace JTranslation\Form;
+namespace JTranslate\Form;
 
 use Zend\Form\Form;
 use Zend\InputFilter\InputFilterProviderInterface;

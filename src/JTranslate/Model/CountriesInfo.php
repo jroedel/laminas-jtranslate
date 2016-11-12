@@ -1,5 +1,5 @@
 <?php
-namespace JTranslation\Model;
+namespace JTranslate\Model;
 
 class CountriesInfo
 {

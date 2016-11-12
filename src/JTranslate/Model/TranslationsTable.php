@@ -1,5 +1,5 @@
 <?php
-namespace JTranslation\Model;
+namespace JTranslate\Model;
 
 use Zend\Db\Adapter\AdapterAwareInterface;
 use Zend\Db\TableGateway\AbstractTableGateway;

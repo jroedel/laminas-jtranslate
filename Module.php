@@ -1,9 +1,9 @@
 <?php
-namespace JTranslation;
+namespace JTranslate;
 
 use Zend\Mvc\MvcEvent;
-use JTranslation\I18n\Translator\TranslatorEventListener;
-use JTranslation\Controller\Plugin\NowMessenger;
+use JTranslate\I18n\Translator\TranslatorEventListener;
+use JTranslate\Controller\Plugin\NowMessenger;
 
 class Module
 {
@@ -47,9 +47,6 @@ class Module
             $controller = $e->getTarget();
             $controllerClass = get_class($controller);
             $moduleNamespace = substr($controllerClass, 0, strpos($controllerClass, '\\'));
-            if ($moduleNamespace == "Patres\Controller") {
-                var_dump($moduleNamespace);
-            }
             $viewRenderer->plugin('translate')->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->formLabel()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->formText()->setTranslatorTextDomain($moduleNamespace);
@@ -75,8 +72,8 @@ class Module
             
             $em->attach( MvcEvent::EVENT_FINISH,
                 function ($e) {
-                    /** @var \JTranslation\Model\TranslationsTable $table **/
-                    $table = $e->getApplication()->getServiceManager()->get('JTranslation\Model\TranslationsTable');
+                    /** @var \JTranslate\Model\TranslationsTable $table **/
+                    $table = $e->getApplication()->getServiceManager()->get('JTranslate\Model\TranslationsTable');
                     $result = $table->writeMissingPhrasesToDb();
                 }, 
                 -1
@@ -96,12 +93,12 @@ class Module
                             );
                         }
                     }
-                    $sm->get('JTranslation\Model\TranslationsTable')->setArrayFilePatterns($textDomainMap);
+                    $sm->get('JTranslate\Model\TranslationsTable')->setArrayFilePatterns($textDomainMap);
                 },
                 -1
             );
             
-            $table = $sm->get('JTranslation\Model\TranslationsTable');
+            $table = $sm->get('JTranslate\Model\TranslationsTable');
             $listener = new TranslatorEventListener($table, $table->getLocales());
             $listener->attach($translator->getEventManager());
         } catch (\Exception $exception) {

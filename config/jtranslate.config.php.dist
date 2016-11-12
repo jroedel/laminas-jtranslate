@@ -1,6 +1,6 @@
 <?php
 return [
-    'jtranslation' => [
+    'jtranslate' => [
         'phrases_table_name' => 'trans_phrases',
         'translations_table_name' => 'trans_translations',
         'project_name' => 'application', //change this value for each project

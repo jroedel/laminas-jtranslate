@@ -1,6 +1,6 @@
 <?php
 
-namespace JTranslation\Controller\Plugin;
+namespace JTranslate\Controller\Plugin;
 
 use Zend\Mvc\Controller\Plugin\AbstractPlugin;
 

@@ -1,13 +1,13 @@
 <?php
-namespace JTranslation\Service;
+namespace JTranslate\Service;
 
 use Zend\ServiceManager\FactoryInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 use Zend\Json\Json;
-use JTranslation\Model\CountriesInfo;
+use JTranslate\Model\CountriesInfo;
 
 /**
- * Factory responsible of priming the PatresTable service
+ * Factory responsible of priming the CountriesInfo service
  *
  * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
@@ -17,6 +17,8 @@ class CountriesFactory implements FactoryInterface
      * {@inheritDoc}
      *
      * @return CreateTimelineEventForm
+     * 
+     * @todo make sure this always works...
      */
     public function createService(ServiceLocatorInterface $serviceLocator)
     {
