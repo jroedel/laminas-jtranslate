@@ -102,6 +102,7 @@ return [
         'factories' => [
             'flag'					=> 'JTranslate\View\Helper\Service\FlagFactory',
             'countryName'			=> 'JTranslate\View\Helper\Service\CountryNameFactory',
+            'nowMessenger'	        => 'JTranslate\View\Helper\Service\NowMessengerFactory',
         ],
     ],
     'service_manager' => [
@@ -114,6 +115,7 @@ return [
         ],
         'aliases' => [
             'jtranslate_db_adapter' => 'Zend\Db\Adapter\Adapter',
+            'translator'            => 'MvcTranslator',
         ],
     ],
 ];
