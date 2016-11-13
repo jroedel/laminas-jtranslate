@@ -11,7 +11,9 @@ return array(
     'Phrase' => 'Phrase',
     'Portuguese (Brazil)' => 'Portuguese (Brazil)',
     'Show all translations' => 'Show all translations',
+    'Show pending translations' => 'Show pending translations',
     'Spanish (Spain)' => 'Spanish (Spain)',
     'submitted on %s by %s' => 'submitted on %s by %s',
     'Text Domain' => 'Text Domain',
+    'Translations successfully updated.' => 'Translations successfully updated.',
 );

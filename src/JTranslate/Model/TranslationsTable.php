@@ -88,11 +88,25 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
     
     /**
      * 
+     * @var array
+     */
+    protected $userModules;
+    
+    /**
+     * The full path to the root of the MVC project
+     * @var string 
+     */
+    protected $rootDirectory;
+    
+    protected $filePattern = '%s.lang.php'; //@todo make this configurable
+    
+    /**
+     * 
      * @param TableGatewayInterface $gateway
      * @param StorageInterface $cache
      * @param unknown $config
      */
-    public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUser, $userTable)
+    public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUser, $userTable, $rootDirectory)
     {
         $this->phrasesGateway       = $phrasesGateway;
         $this->translationsGateway  = $translationsGateway;
@@ -103,6 +117,8 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
         $this->actingUser           = $actingUser;
         $this->userTable            = $userTable;
         $this->newMissingPhrases    = array();
+        
+        $this->setRootDirectory($rootDirectory);
     }
 
     /**
@@ -363,22 +379,26 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     public function writePhpTranslationArrays()
     {
         $translations = $this->getTranslatedText();
-        $test = array();
         foreach ($translations as $textDomain => $localeTrans) {
-            if (key_exists($textDomain, $this->arrayFilePatterns)) {
-                foreach ($localeTrans as $locale => $trans) {
-                    $generator = new ValueGenerator($trans, 'array');
-                    $file = FileGenerator::fromArray(array(
-                        'body' => 'return '.$generator->generate().';',
-                    ));
-                    $code = $file->generate();
-                    $test[$this->arrayFilePatterns[$textDomain]['base_dir'].'/'.
-                        sprintf($this->arrayFilePatterns[$textDomain]['pattern'], 
-                        $locale)] = $code;
-                    file_put_contents($this->arrayFilePatterns[$textDomain]['base_dir'].'/'.
-                        sprintf($this->arrayFilePatterns[$textDomain]['pattern'], 
-                        $locale), $code);
+            foreach ($localeTrans as $locale => $trans) {
+                //create an array value generator to write the file
+                $generator = new ValueGenerator($trans, 'array');
+                $file = FileGenerator::fromArray(array(
+                    'body' => 'return '.$generator->generate().';',
+                ));
+                $code = $file->generate();
+                
+                //if the current text domain is a module, then save it there. If not, to the root.
+                if (key_exists($textDomain, $this->userModules)) {
+                    $folder = $this->rootDirectory.'/module/'.$textDomain.'/language';
+                } else {
+                    $folder = $this->rootDirectory.'/language/'.$textDomain;
                 }
+                if (!is_dir($folder)) {
+                    mkdir($folder, null, true);
+                }
+                $fileToWrite = $folder.'/'.sprintf($this->filePattern, $locale);
+                file_put_contents($fileToWrite, $code);
             }
         }
     }
@@ -431,14 +451,9 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         return $result;
     }
     
-//     public function writeMissingCountryNamesToDb()
-//     {
-        
-//     }
-    
-    public function setArrayFilePatterns($patterns)
+    public function setUserModules($userModules)
     {
-        $this->arrayFilePatterns = $patterns;
+        $this->userModules = $userModules;
         return $this;
     }
     
@@ -448,6 +463,27 @@ ORDER BY `locale`, `text_domain`, `phrase`";
             throw \Exception('User table not loaded into TranslationsTable');
         } 
         return $this->userTable;
+    }
+    
+    /**
+     * @return string
+     */
+    public function getRootDirectory()
+    {
+        return $this->rootDirectory;
+    }
+    
+    /**
+     * 
+     * @param string $rootDirectory
+     * @return self
+     */
+    public function setRootDirectory($rootDirectory)
+    {
+        $rootDirectory = rtrim($rootDirectory, '/');
+        $rootDirectory = rtrim($rootDirectory, '\\');
+        $this->rootDirectory = $rootDirectory;
+        return $this;
     }
     
     /**
@@ -481,7 +517,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         return $return;
     }
     
-    protected function getLocaleNames()
+    public function getLocaleNames()
     {
         return array(
     'af_NA' => 'Afrikaans (Namibia)',

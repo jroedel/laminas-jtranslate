@@ -29,12 +29,13 @@ class TranslationsTableFactory implements FactoryInterface
         $phrasesTableName = $config['phrases_table_name'] ? $config['phrases_table_name'] : 'trans_phrases';
         $translationsGateway = new TableGateway($translationsTableName, $adapter);
         $phrasesGateway = new TableGateway($phrasesTableName , $adapter);
+        $rootDirectory = isset($config['root_directory']) ? $config['root_directory'] : getcwd();
 
         /** @var  User $userService **/
         $userService = $serviceLocator->get('zfcuser_user_service');
         $user = $userService->getAuthService()->getIdentity();
         $userTable = $serviceLocator->get('SamUser\Model\UserTable');
-        $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable);
+        $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable, $rootDirectory);
         return $table;
     }
 }

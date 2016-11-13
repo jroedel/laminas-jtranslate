@@ -4,6 +4,7 @@ namespace JTranslate;
 use Zend\Mvc\MvcEvent;
 use JTranslate\I18n\Translator\TranslatorEventListener;
 use JTranslate\Controller\Plugin\NowMessenger;
+use Zend\I18n\Translator\Translator;
 
 class Module
 {
@@ -58,52 +59,61 @@ class Module
             $viewRenderer->formRow()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->headTitle()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->flashMessenger()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->navigation()->setTranslatorTextDomain('Application');
+            $viewRenderer->navigation()->setTranslatorTextDomain('Application'); //@todo make this configurable
         }, 100);
+
+        $em->attach( MvcEvent::EVENT_FINISH,
+            function ($e) {
+                /** @var \JTranslate\Model\TranslationsTable $table **/
+                $table = $e->getApplication()->getServiceManager()->get('JTranslate\Model\TranslationsTable');
+                $result = $table->writeMissingPhrasesToDb();
+            },
+            -1
+        );
         
         try { //fail silently if we can't get a translator, or something else goes wrong, then log it.
-            $translator = $sm->get('translator');
+            /** @var Translator $translator */
+            $translator = $sm->get('jtranslate_translator');
             $translator->enableEventManager();
     //         if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']))
     //             $translator->setLocale(\Locale::acceptFromHttp($_SERVER['HTTP_ACCEPT_LANGUAGE']));
             
             $translator->setLocale(\Locale::getDefault());
-            $translator->setFallbackLocale('en_US');
-            
-            $em->attach( MvcEvent::EVENT_FINISH,
-                function ($e) {
-                    /** @var \JTranslate\Model\TranslationsTable $table **/
-                    $table = $e->getApplication()->getServiceManager()->get('JTranslate\Model\TranslationsTable');
-                    $result = $table->writeMissingPhrasesToDb();
-                }, 
-                -1
-            );
-            
-            //collect the file patterns so we know where to write the arrays to
-            $em->attach(MvcEvent::EVENT_ROUTE,
-                function ($e) {
-                    $sm = $e->getApplication()->getServiceManager();
-                    $config = $sm->get('Config')['translator'];
-                    $textDomainMap = array();
-                    foreach ($config['translation_file_patterns'] as $pattern) {
-                        if ($pattern['type'] == 'phpArray') {
-                            $textDomainMap[isset($pattern['text_domain']) ? $pattern['text_domain'] : 'default'] = array(
-                                'base_dir' => $pattern['base_dir'],
-                                'pattern'  => $pattern['pattern'],
-                            );
-                        }
-                    }
-                    $sm->get('JTranslate\Model\TranslationsTable')->setArrayFilePatterns($textDomainMap);
-                },
-                -1
-            );
-            
+            $translator->setFallbackLocale('en_US'); //@todo make this a configurable value
+
+            //attach the translator listener
             $table = $sm->get('JTranslate\Model\TranslationsTable');
             $listener = new TranslatorEventListener($table, $table->getLocales());
             $listener->attach($translator->getEventManager());
+            
+            //add patterns to the translator
+            $manager        = $sm->get('ModuleManager');
+            $loadedModules  = $manager->getLoadedModules();
+            $modules        = [];
+            foreach(glob('module/*', GLOB_ONLYDIR) as $dir) {
+                $dir = str_replace('module/', '', $dir);
+                if (key_exists($dir, $loadedModules)) {
+                    $modules[$dir] = getcwd().'/module/'.$dir.'/language';
+                }
+            }
+            $table->setUserModules($modules);
+            $pattern = '%s.lang.php';
+            foreach ($modules as $module => $directory) {
+                if (file_exists($directory)) {
+                    $translator->addTranslationFilePattern('phpArray', $directory, $pattern, $module);
+                }
+            }
+            //add a pattern for folders in '/language' if it exists
+            $directory = getcwd().'/language';
+            if (file_exists($directory)) {
+                foreach(glob('language/*', GLOB_ONLYDIR) as $dir) {
+                    $dir = str_replace('language/', '', $dir);
+                    $translator->addTranslationFilePattern('phpArray', $directory.'/'.$dir, $pattern, $dir);
+                }
+            }
         } catch (\Exception $exception) {
-            $service = $sm->get('ApplicationErrorHandling');
-            $service->logException($exception);
-        }   
+//             $service = $sm->get('ApplicationErrorHandling');
+//             $service->logException($exception);
+        }
     }
 }

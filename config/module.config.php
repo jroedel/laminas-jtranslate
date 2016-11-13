@@ -4,7 +4,7 @@ return [
     'jtranslate' => [
         'phrases_table_name' => 'trans_phrases',
         'translations_table_name' => 'trans_translations',
-        'project_name' => 'application', //change this value for each project
+        'root_directory' => getcwd(),
         'locales_to_translate' => [
             'es_ES',
             'de_DE',
@@ -38,12 +38,6 @@ return [
                 'base_dir' => __DIR__ . '/../language',
                 'pattern'  => '%s.lang.php',
                 'text_domain' => __NAMESPACE__,
-            ],
-            [
-                'type'     => 'phpArray',
-                'base_dir' => __DIR__ . '/../../../language',
-                'pattern'  => '%s.lang.php',
-                'text_domain' => 'default',
             ],
         ],
     ],
@@ -115,7 +109,7 @@ return [
         ],
         'aliases' => [
             'jtranslate_db_adapter' => 'Zend\Db\Adapter\Adapter',
-            'translator'            => 'MvcTranslator',
+            'jtranslate_translator' => 'MvcTranslator',
         ],
     ],
 ];

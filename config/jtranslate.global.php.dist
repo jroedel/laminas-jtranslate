@@ -4,5 +4,19 @@ return [
         'phrases_table_name' => 'trans_phrases',
         'translations_table_name' => 'trans_translations',
         'project_name' => 'application', //change this value for each project
+        'root_directory' => getcwd(),
+        'locales_to_translate' => [
+            'es_ES',
+            'de_DE',
+            'pt_BR'
+        ],
+        'key_locale' => 'en_US',
+    ],
+    //here you can configure the database adapter and translator jtranslate uses
+    'service_manager' => [
+        'aliases' => [
+            'jtranslate_db_adapter' => 'Zend\Db\Adapter\Adapter',
+            'jtranslate_translator' => 'MvcTranslator',
+        ],
     ],
 ];
