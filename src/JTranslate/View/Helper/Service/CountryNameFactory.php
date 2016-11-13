@@ -4,7 +4,7 @@ namespace JTranslate\View\Helper\Service;
 use Zend\ServiceManager\FactoryInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 use JTranslate\Model\CountriesInfo;
-use Patres\View\Helper\CountryName;
+use JTranslate\View\Helper\CountryName;
 
 /**
  * Factory responsible of priming the CountryName view helper

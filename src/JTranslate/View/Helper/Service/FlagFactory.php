@@ -4,7 +4,7 @@ namespace JTranslate\View\Helper\Service;
 use Zend\ServiceManager\FactoryInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 use JTranslate\Model\CountriesInfo;
-use Patres\View\Helper\Flag;
+use JTranslate\View\Helper\Flag;
 
 /**
  * Factory responsible of priming the Flag view helper
