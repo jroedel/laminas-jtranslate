@@ -98,6 +98,12 @@ return [
         ],
     ],
 
+    'view_helpers' => [
+        'factories' => [
+            'flag'					=> 'JTranslate\View\Helper\Service\FlagFactory',
+            'countryName'			=> 'JTranslate\View\Helper\Service\CountryNameFactory',
+        ],
+    ],
     'service_manager' => [
         'factories' => [
             'JTranslate\Cache'                    => 'JTranslate\Service\CacheFactory',
