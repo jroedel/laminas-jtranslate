@@ -4,7 +4,7 @@ $headText = 'Manage Translations';
 $this->headTitle($headText);
 ?>
 <p><?php if ($this->showAll) :?>
-	<a href="<?php echo $this->url('JTranslate');?>" class="btn btn-primary"><?php echo $this->translate("Show pending translations");?></a>
+	<a href="<?php echo $this->url('jtranslate');?>" class="btn btn-primary"><?php echo $this->translate("Show pending translations");?></a>
 <?php else:?>
 	<a href="?showAll=true" class="btn btn-primary"><?php echo $this->translate("Show all translations");?></a>
 <?php endif;?></p>
@@ -34,7 +34,7 @@ $this->headTitle($headText);
     }?>
 <tr>
 	<td><?php echo $entity['textDomain'];?></td>
-	<td><a href="<?php echo $this->url('JTranslate/phrase', array('phrase_id' => $entity['phraseId'])); ?>">
+	<td><a href="<?php echo $this->url('jtranslate/phrase', array('phrase_id' => $entity['phraseId'])); ?>">
 <span class="glyphicon glyphicon-pencil"></span></a>&nbsp;<?php echo $this->escapeHtml(Text::truncate($entity['phrase'],100));?></td>
 	<?php foreach ($this->locales as $key => $value) : ?>
 	<td><?php if (isset($entity[$key])) {
