@@ -8,7 +8,7 @@ This repository is used in a production website, but is far from perfect. Any he
 
 1. Require JTranslate
     ```
-    ./composer.phar require jroedel/jtranslate
+    php composer.phar require jroedel/jtranslate
     ```
     
 2. Copy `config/jtranslate.config.php.dist` to your Application config folder, and customize the values.
