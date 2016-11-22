@@ -18,9 +18,11 @@
     "minimum-stability" : "stable",
     "require": {
         "php": ">=5.3.3",
-        "zendframework/zendframework": "2.*@stable",
+        "zendframework/zend-code": "dev-master",
+        "zendframework/zend-i18n": "dev-master",
 		"cakephp/utility": "3.2.*",
-        "mledoze/countries": "dev-master"
+        "mledoze/countries": "dev-master",
+        "jroedel/zf2-juser": "dev-master"
     },
     "autoload": {
         "psr-0": {

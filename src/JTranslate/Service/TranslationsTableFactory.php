@@ -31,10 +31,11 @@ class TranslationsTableFactory implements FactoryInterface
         $phrasesGateway = new TableGateway($phrasesTableName , $adapter);
         $rootDirectory = isset($config['root_directory']) ? $config['root_directory'] : getcwd();
 
+        //@todo URGENT: I can't rely on user things. Must be factored out
         /** @var  User $userService **/
         $userService = $serviceLocator->get('zfcuser_user_service');
         $user = $userService->getAuthService()->getIdentity();
-        $userTable = $serviceLocator->get('SamUser\Model\UserTable');
+        $userTable = $serviceLocator->get('JUser\Model\UserTable');
         $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable, $rootDirectory);
         return $table;
     }

@@ -10,7 +10,7 @@ use Zend\Db\Adapter\AdapterInterface;
 use Zend\Db\Sql\Sql;
 use Zend\Db\Sql\Where;
 use ZfcUser\Entity\UserInterface;
-use SamUser\Model\UserTable;
+use JUser\Model\UserTable;
 use Zend\Code\Generator\ValueGenerator;
 use Zend\Code\Generator\FileGenerator;
 
