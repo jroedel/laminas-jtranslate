@@ -156,7 +156,8 @@ ORDER BY `text_domain`, `phrase`";
         $userTable = $this->getUserTable();
         $return = array();
         foreach ($results as $tran) { //@todo avoid setting null locale keys for records without any translations
-            if (isset($return[$tran['translation_phrase_id']])) { //if we already already have an entry for this phrase
+            //if we already already have an entry for this phrase
+            if (isset($return[$tran['translation_phrase_id']])) {
                 $return[$tran['translation_phrase_id']][$tran['locale']] = $tran['translation'];
                 $return[$tran['translation_phrase_id']][$tran['locale'].'Id'] = $tran['translation_id'];
                 $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedBy'] = $tran['modified_by'] ? 
