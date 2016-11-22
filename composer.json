@@ -15,13 +15,13 @@
     "support": {
         "issues": "https://github.com/jroedel/zf2-jtranslate/issues"
     },
-    "minimum-stability" : "stable",
+    "minimum-stability" : "dev",
     "require": {
         "php": ">=5.3.3",
-        "zendframework/zend-code": "^3.0.2 || ^2.5.0",
-        "zendframework/zend-i18n": "^2.6.0",
-		"cakephp/utility": "3.2.*",
-        "mledoze/countries": "^1.8.0",
+        "zendframework/zend-code": "^3.0.2@stable || ^2.5.0@stable",
+        "zendframework/zend-i18n": "^2.6.0@stable",
+		"cakephp/utility": "^3.2.0@stable",
+        "mledoze/countries": "^1.8.0@stable",
         "jroedel/zf2-juser": "@dev"
     },
     "autoload": {
