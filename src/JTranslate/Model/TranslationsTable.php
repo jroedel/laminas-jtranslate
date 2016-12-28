@@ -414,10 +414,10 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 if (is_null($phrase)) {
                     continue;
                 }
-                var_dump([
-                    'text_domain' => $textDomain,
-                    'phrase' => $phrase
-                ]);
+//                 var_dump([
+//                     'text_domain' => $textDomain,
+//                     'phrase' => $phrase
+//                 ]);
                 //insert into phrases table
                 $sql = new Sql($this->adapter);
                 $insert =
