@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS `trans_translations` (
   `translation_phrase_id` int(11) NOT NULL,
   `locale` varchar(20) NOT NULL,
   `translation` varchar(2000) NOT NULL,
-  `modified_by` varchar(70) NOT NULL,
+  `modified_by` varchar(70) NULL,
   `modified_on` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 

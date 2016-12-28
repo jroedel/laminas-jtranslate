@@ -17,35 +17,35 @@ use Zend\Code\Generator\FileGenerator;
 class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
 {
     /**
-     * 
+     *
      * @var array $phrasesInDb
      */
     protected $phrasesInDb;
-    
+
     /**
-     * 
+     *
      * @var array
      */
     protected $translationsCache;
     /**
-     * 
+     *
      * @var array $tableCache
      */
     protected $phrasesCache;
     /**
-     * 
+     *
      * @var array $newMissingTranslations
      */
     protected $newMissingPhrases;
-    
+
     /**
-     * 
+     *
      * @var AdapterInterface
      */
     protected $adapter;
-    
+
     /**
-     * 
+     *
      * @var TableGatewayInterface $phrasesGateway
      */
     protected $phrasesGateway;
@@ -55,56 +55,57 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      * @var TableGatewayInterface $translationsGateway
      */
     protected $translationsGateway;
-    
+
     /**
-     * 
+     *
      * @var \Iterator
      */
     protected $config;
-    
+
     /**
-     * 
+     *
      * @var StorageInterface $cache
      */
     protected $cache;
-    
+
     /**
-     * 
+     *
      * @var UserInterface
      */
     protected $actingUser;
-    
+
     /**
-     * 
+     *
      * @var UserTable
      */
     protected $userTable;
-    
+
     /**
-     * 
+     *
      * @var array
      */
     protected $arrayFilePatterns;
-    
+
     /**
-     * 
+     *
      * @var array
      */
     protected $userModules;
-    
+
     /**
      * The full path to the root of the MVC project
-     * @var string 
+     * @var string
      */
     protected $rootDirectory;
-    
+
     protected $filePattern = '%s.lang.php'; //@todo make this configurable
-    
+
     /**
-     * 
+     *
      * @param TableGatewayInterface $gateway
      * @param StorageInterface $cache
      * @param unknown $config
+     * @todo throw error if no project_name config key exists
      */
     public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUser, $userTable, $rootDirectory)
     {
@@ -117,25 +118,25 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
         $this->actingUser           = $actingUser;
         $this->userTable            = $userTable;
         $this->newMissingPhrases    = array();
-        
+
         $this->setRootDirectory($rootDirectory);
     }
 
     /**
      *  Set db adapter
-     *  
+     *
      *  @param Adapter $adapter
      *  @return self
      */
-    public function setDbAdapter(Adapter $adapter) 
-    { 
-         $this->adapter = $adapter; 
-         $this->initialize(); 
+    public function setDbAdapter(Adapter $adapter)
+    {
+         $this->adapter = $adapter;
+         $this->initialize();
          return $this;
     }
-    
+
     /**
-     * 
+     *
      * @return array
      */
     public function getTranslations()
@@ -151,7 +152,7 @@ WHERE (p.`project` = ?)
 ORDER BY `text_domain`, `phrase`";
         $sqlParams = array($this->config['project_name']);
         $results = $this->fetchSome(null, $sql, $sqlParams);
-        
+
         $utc = new \DateTimeZone('UTC');
         $userTable = $this->getUserTable();
         $return = array();
@@ -160,18 +161,18 @@ ORDER BY `text_domain`, `phrase`";
             if (isset($return[$tran['translation_phrase_id']])) {
                 $return[$tran['translation_phrase_id']][$tran['locale']] = $tran['translation'];
                 $return[$tran['translation_phrase_id']][$tran['locale'].'Id'] = $tran['translation_id'];
-                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedBy'] = $tran['modified_by'] ? 
+                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedBy'] = $tran['modified_by'] ?
                         $userTable->getUser($tran['modified_by']) : null;
-                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedOn'] = $tran['modified_on'] ? 
+                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedOn'] = $tran['modified_on'] ?
                         new \DateTime($tran['modified_on'], $utc) : null;
             } else {
                 $return[$tran['translation_phrase_id']] = array(
                     'phraseId' => $tran['translation_phrase_id'],
                     $tran['locale'] => $tran['translation'],
                     $tran['locale'].'Id' => $tran['translation_id'],
-                    $tran['locale'].'ModifiedBy' => $tran['modified_by'] ? 
+                    $tran['locale'].'ModifiedBy' => $tran['modified_by'] ?
                         $userTable->getUser($tran['modified_by']) : null,
-                    $tran['locale'].'ModifiedOn' => $tran['modified_on'] ? 
+                    $tran['locale'].'ModifiedOn' => $tran['modified_on'] ?
                         new \DateTime($tran['modified_on'], $utc) : null,
                     'textDomain' => $tran['text_domain'],
                     'phrase' => $tran['phrase'],
@@ -182,7 +183,7 @@ ORDER BY `text_domain`, `phrase`";
         $this->translationsCache = $return;
         return $return;
     }
-    
+
     public function getOutstandingTranslationCount()
     {
         $sql = "SELECT p.`translation_phrase_id`, COUNT(*) AS PhraseLocaleCount
@@ -193,13 +194,13 @@ GROUP BY translation_phrase_id
 HAVING PhraseLocaleCount < ?";
         $sqlParams = array($this->config['project_name'], count($this->config['locales_to_translate'])+1);
         $results = $this->fetchSome(null, $sql, $sqlParams);
-        if (!$results) { 
+        if (!$results) {
             return 0;
         } else {
             return count($results);
         }
     }
-    
+
     public function getPhrase($id)
     {
         if ($this->translationsCache) {
@@ -207,7 +208,7 @@ HAVING PhraseLocaleCount < ?";
         }
         return $this->getTranslations()[$id];
     }
-    
+
     public function updatePhrase($id, $data)
     {
         $phrase = $this->getTranslations()[$id];
@@ -215,7 +216,7 @@ HAVING PhraseLocaleCount < ?";
 
         $results = array();
         foreach ($this->getLocales(true) as $key => $value) {
-            if (!isset($data[$key]) || !$data[$key] || 
+            if (!isset($data[$key]) || !$data[$key] ||
                 (isset($phrase[$key]) && $data[$key] === $phrase[$key])) { //in the case that they didn't write anything, continue
                 continue;
             }
@@ -226,7 +227,7 @@ HAVING PhraseLocaleCount < ?";
                     ->set(array(
                         'translation' => $data[$key],
                         'modified_on' => $dateString,
-                        'modified_by' => $this->actingUser->id
+                        'modified_by' => !is_null($this->actingUser) ? $this->actingUser->id : null,
                     ))
                     ->where(array('translation_id' => $data[$key.'Id']));
                 $statement = $sql->prepareStatementForSqlObject($update);
@@ -240,7 +241,7 @@ HAVING PhraseLocaleCount < ?";
                     'locale' => $key,
                     'translation' => $data[$key],
                     'modified_on' => $dateString,
-                    'modified_by' => $this->actingUser->id
+                    'modified_by' => !is_null($this->actingUser) ? $this->actingUser->id : null,
                 ));
                 $statement = $sql->prepareStatementForSqlObject($insert);
                 $results[] = $statement->execute();
@@ -248,9 +249,9 @@ HAVING PhraseLocaleCount < ?";
         }
         return $results;
     }
-    
+
     /**
-     * 
+     *
      * @return string[]
      */
     public function getLocales($shouldIncludeKeyLocale = false)
@@ -258,7 +259,7 @@ HAVING PhraseLocaleCount < ?";
         $return = array();
         $localeNames = $this->getLocaleNames();
         $locales = $this->config['locales_to_translate'];
-        if ($shouldIncludeKeyLocale && $this->config && isset($this->config['key_locale']) && 
+        if ($shouldIncludeKeyLocale && $this->config && isset($this->config['key_locale']) &&
             !in_array($this->config['key_locale'], $locales)) {
             array_push($locales, $this->config['key_locale']);
         }
@@ -269,9 +270,9 @@ HAVING PhraseLocaleCount < ?";
         }
         return $return;
     }
-    
+
     /**
-     * 
+     *
      * @return string[][]
      */
     public function getPhraseKeysFromDb()
@@ -323,9 +324,9 @@ HAVING PhraseLocaleCount < ?";
         }
         return $this;
     }
-    
+
     /**
-     * 
+     *
      * @param array $params
      */
     public function reportMissingTranslation($params)
@@ -336,14 +337,14 @@ HAVING PhraseLocaleCount < ?";
         }
         return $this;
     }
-    
+
     /**
      * Returns the translated text of the db in a 4-dimensional array
      * @return string[][][]
      */
     public function getTranslatedText()
     {
-        $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`, 
+        $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`,
 t.`locale`, t.`translation`, p.`text_domain`,  p.`phrase`
 FROM `trans_phrases` p
 INNER JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
@@ -351,7 +352,7 @@ WHERE (p.`project` = ?)
 ORDER BY `locale`, `text_domain`, `phrase`";
         $sqlParams = array($this->config['project_name']);
         $results = $this->fetchSome(null, $sql, $sqlParams);
-        
+
         $return = array();
         foreach ($results as $tran) {
             if (isset($return[$tran['text_domain']])) {
@@ -372,10 +373,10 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         }
         return $return;
     }
-    
+
     /**
-     * Queries the database for the latest translations and rewrites all the files. 
-     * 
+     * Queries the database for the latest translations and rewrites all the files.
+     *
      */
     public function writePhpTranslationArrays()
     {
@@ -388,7 +389,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                     'body' => 'return '.$generator->generate().';',
                 ));
                 $code = $file->generate();
-                
+
                 //if the current text domain is a module, then save it there. If not, to the root.
                 if (key_exists($textDomain, $this->userModules)) {
                     $folder = $this->rootDirectory.'/module/'.$textDomain.'/language';
@@ -403,7 +404,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
             }
         }
     }
-    
+
     public function writeMissingPhrasesToDb()
     {
         $dateString = date_format((new \DateTime(null, new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
@@ -430,7 +431,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 $statement = $sql->prepareStatementForSqlObject($insert);
                 $lastResult = $statement->execute();
                 $result[] = $lastResult;
-                
+
                 //auto insert into translations table for the key locale
                 $phrasesKeyId = $lastResult->getGeneratedValue();
                 $sql = new Sql($this->adapter);
@@ -440,32 +441,32 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                     'translation_phrase_id' => $phrasesKeyId,
                     'locale' => $this->config['key_locale'],
                     'translation' => $phrase,
-                    'modified_by' => $this->actingUser->id,
+                    'modified_by' => !is_null($this->actingUser) ? $this->actingUser->id : null,
                     'modified_on' => $dateString,
                 ));
                 $statement = $sql->prepareStatementForSqlObject($insert);
                 $lastResult = $statement->execute();
                 $result[] = $lastResult;
-                
+
             }
         }
         return $result;
     }
-    
+
     public function setUserModules($userModules)
     {
         $this->userModules = $userModules;
         return $this;
     }
-    
+
     public function getUserTable()
     {
         if (!$this->userTable) {
             throw \Exception('User table not loaded into TranslationsTable');
-        } 
+        }
         return $this->userTable;
     }
-    
+
     /**
      * @return string
      */
@@ -473,9 +474,9 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     {
         return $this->rootDirectory;
     }
-    
+
     /**
-     * 
+     *
      * @param string $rootDirectory
      * @return self
      */
@@ -486,7 +487,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         $this->rootDirectory = $rootDirectory;
         return $this;
     }
-    
+
     /**
      * @param Where|\Closure|string|array $where
      * @param string
@@ -510,14 +511,14 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         } else {
             $result = $gateway->select($where);
         }
-    
+
         $return = array();
         foreach ($result as $row) {
             $return[] = $row;
         }
         return $return;
     }
-    
+
     public function getLocaleNames()
     {
         return array(
