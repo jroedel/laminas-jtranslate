@@ -139,16 +139,15 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      *
      * @return array
      */
-    public function getTranslations()
+    public function getTranslations($fromAllProjects = false)
     {
-        if ($this->translationsCache) {
+        if ($this->translationsCache && !$fromAllProjects) {
             return $this->translationsCache;
         }
         $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`, t.`locale`,t.`translation`,
-t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`
+t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`
 FROM `trans_phrases` p
 LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
-WHERE (p.`project` = ?)
 ORDER BY `text_domain`, `phrase`";
         $sqlParams = array($this->config['project_name']);
         $results = $this->fetchSome(null, $sql, $sqlParams);
@@ -157,6 +156,10 @@ ORDER BY `text_domain`, `phrase`";
         $userTable = $this->getUserTable();
         $return = array();
         foreach ($results as $tran) { //@todo avoid setting null locale keys for records without any translations
+            //skip rows from other projects if we don't need them
+            if (!$fromAllProjects && $tran['project'] !== $this->config['project_name']) {
+                continue;
+            }
             //if we already already have an entry for this phrase
             if (isset($return[$tran['translation_phrase_id']])) {
                 $return[$tran['translation_phrase_id']][$tran['locale']] = $tran['translation'];
@@ -405,19 +408,29 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         }
     }
 
-    public function writeMissingPhrasesToDb()
+    /**
+     * Check the TranslationTable object for new missing translations and write them to the database to be translated
+     * @param string $routeName
+     * @return \Zend\Db\Adapter\Driver\ResultInterface[]
+     */
+    public function writeMissingPhrasesToDb($routeName = null)
     {
         $dateString = date_format((new \DateTime(null, new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
+        $translations = $this->getTranslations(true);
+
+        $localesToSearch = $this->config['locales_to_translate'];
+        if (!in_array($this->config['key_locale'], $localesToSearch)) {
+            $localesToSearch[] = $this->config['key_locale'];
+        }
+
+        //if we find something, we'll have to write the php arrays
+        $weFoundAPreviousMatch = false;
         $result = array();
         foreach ($this->newMissingPhrases as $textDomain => $phrases) {
             foreach ($phrases as $phrase) {
                 if (is_null($phrase)) {
                     continue;
                 }
-//                 var_dump([
-//                     'text_domain' => $textDomain,
-//                     'phrase' => $phrase
-//                 ]);
                 //insert into phrases table
                 $sql = new Sql($this->adapter);
                 $insert =
@@ -426,29 +439,68 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                         'project' => $this->config['project_name'],
                         'text_domain' => $textDomain,
                         'phrase' => $phrase,
-                        'added_on' => $dateString
+                        'added_on' => $dateString,
+                        'origin_route' => $routeName,
                     ));
                 $statement = $sql->prepareStatementForSqlObject($insert);
                 $lastResult = $statement->execute();
+                $phrasesKeyId = $lastResult->getGeneratedValue();
                 $result[] = $lastResult;
+
+                //see if we have a matching phrase in another text domain
+                $translationsToInsert = array();
+                foreach ($translations as $translationPhrase) {
+                    if (0 === strcmp($translationPhrase['phrase'], $phrase)) { //we found a matching existing phrase
+                        foreach ($localesToSearch as $locale) {
+                            if (isset($translationPhrase[$locale]) && 0 !== strlen($translationPhrase[$locale])) { //we found a phrase-locale match
+                                if (!isset($translationsToInsert[$locale])) {//we just take the first translation we find, no way to judge better and worse...
+                                    $weFoundAPreviousMatch = true;
+                                    $translationsToInsert[$locale] = array(
+                                        'translation_phrase_id' => $phrasesKeyId,
+                                        'locale' => $locale,
+                                        'translation' => $translationPhrase[$locale],
+                                        'modified_by' => (isset($translationPhrase[$locale.'ModifiedBy']) &&
+                                            isset($translationPhrase[$locale.'ModifiedBy']['userId'])) ?
+                                            $translationPhrase[$locale.'ModifiedBy']['userId'] :
+                                            (!is_null($this->actingUser) ? $this->actingUser->id : null),
+                                        'modified_on' => $dateString,
+                                    );
+                                }
+                            }
+                        }
+                        if (count($translationsToInsert) === count($localesToSearch) // we have all the translations we need
+                        ) {
+                            continue;
+                        }
+                    }
+                }
 
                 //auto insert into translations table for the key locale
-                $phrasesKeyId = $lastResult->getGeneratedValue();
-                $sql = new Sql($this->adapter);
-                $insert =
-                $sql->insert($this->config['translations_table_name'])
-                ->values(array(
-                    'translation_phrase_id' => $phrasesKeyId,
-                    'locale' => $this->config['key_locale'],
-                    'translation' => $phrase,
-                    'modified_by' => !is_null($this->actingUser) ? $this->actingUser->id : null,
-                    'modified_on' => $dateString,
-                ));
-                $statement = $sql->prepareStatementForSqlObject($insert);
-                $lastResult = $statement->execute();
-                $result[] = $lastResult;
+                if (!isset($translationsToInsert[$this->config['key_locale']])) {
+                    $translationsToInsert[$this->config['key_locale']] = array(
+                        'translation_phrase_id' => $phrasesKeyId,
+                        'locale' => $this->config['key_locale'],
+                        'translation' => $phrase,
+                        'modified_by' => !is_null($this->actingUser) ? $this->actingUser->id : null,
+                        'modified_on' => $dateString,
+                    );
+                }
+
+                //insert rows
+                foreach ($translationsToInsert as $row) {
+                    $sql = new Sql($this->adapter);
+                    $insert =
+                    $sql->insert($this->config['translations_table_name'])
+                        ->values($row);
+                    $statement = $sql->prepareStatementForSqlObject($insert);
+                    $lastResult = $statement->execute();
+                    $result[] = $lastResult;
+                }
 
             }
+        }
+        if ($weFoundAPreviousMatch) {
+            $this->writePhpTranslationArrays();
         }
         return $result;
     }

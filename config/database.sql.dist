@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS `trans_phrases` (
   `project` varchar(50) NOT NULL,
   `text_domain` varchar(50) NOT NULL,
   `phrase` varchar(2000) NOT NULL,
-  `added_on` datetime NOT NULL
+  `added_on` datetime NOT NULL,
+  `origin_route` VARCHAR(255) NULL DEFAULT NULL,
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------

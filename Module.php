@@ -5,6 +5,7 @@ use Zend\Mvc\MvcEvent;
 use JTranslate\I18n\Translator\TranslatorEventListener;
 use JTranslate\Controller\Plugin\NowMessenger;
 use Zend\I18n\Translator\Translator;
+use Zend\Mvc\Router\RouteMatch;
 
 class Module
 {
@@ -26,7 +27,7 @@ class Module
     {
         return include __DIR__ . '/config/module.config.php';
     }
-    
+
     public function getControllerPluginConfig()
     {
         return array('factories' => array(
@@ -36,7 +37,7 @@ class Module
             },
         ));
     }
-    
+
     public function onBootstrap(MvcEvent $e)
     {
         $sm = $e->getApplication()->getServiceManager();
@@ -66,18 +67,24 @@ class Module
             function ($e) {
                 /** @var \JTranslate\Model\TranslationsTable $table **/
                 $table = $e->getApplication()->getServiceManager()->get('JTranslate\Model\TranslationsTable');
-                $result = $table->writeMissingPhrasesToDb();
+
+                /**
+                 *
+                 * @var RouteMatch $match
+                 */
+                $match = $e->getRouteMatch();
+                $result = $table->writeMissingPhrasesToDb($match ? $match->getMatchedRouteName() : null);
             },
             -1
         );
-        
+
         try { //fail silently if we can't get a translator, or something else goes wrong, then log it.
             /** @var Translator $translator */
             $translator = $sm->get('jtranslate_translator');
             $translator->enableEventManager();
     //         if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']))
     //             $translator->setLocale(\Locale::acceptFromHttp($_SERVER['HTTP_ACCEPT_LANGUAGE']));
-            
+
             $translator->setLocale(\Locale::getDefault());
             $translator->setFallbackLocale('en_US'); //@todo make this a configurable value
 
@@ -85,7 +92,7 @@ class Module
             $table = $sm->get('JTranslate\Model\TranslationsTable');
             $listener = new TranslatorEventListener($table, $table->getLocales());
             $listener->attach($translator->getEventManager());
-            
+
             //add patterns to the translator
             $manager        = $sm->get('ModuleManager');
             $loadedModules  = $manager->getLoadedModules();
