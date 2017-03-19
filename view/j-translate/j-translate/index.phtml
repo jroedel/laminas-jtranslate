@@ -4,21 +4,21 @@ $headText = 'Manage Translations';
 $this->headTitle($headText);
 ?>
 <p><?php if ($this->showAll) :?>
-	<a href="<?php echo $this->url('jtranslate');?>" class="btn btn-primary"><?php echo $this->translate("Show pending translations");?></a>
+    <a href="<?php echo $this->url('jtranslate');?>" class="btn btn-primary"><?php echo $this->translate("Show pending translations");?></a>
 <?php else:?>
-	<a href="?showAll=true" class="btn btn-primary"><?php echo $this->translate("Show all translations");?></a>
+    <a href="?showAll=true" class="btn btn-primary"><?php echo $this->translate("Show all translations");?></a>
 <?php endif;?></p>
 <table class="table responsive-table">
 <thead><tr>
-	<th><?php echo $this->translate('Text Domain');?></th>
-	<th><?php echo $this->translate('Key (English)');?></th>
+    <th><?php echo $this->translate('Text Domain');?></th>
+    <th><?php echo $this->translate('Key (English)');?></th>
 <?php foreach ($this->locales as $locale) : ?>
-	<th><?php echo $this->translate($locale);?></th>
+    <th><?php echo $this->translate($locale);?></th>
 <?php endforeach;?>
 </tr></thead>
 <tbody>
-    <!-- The columns should be: textDomain, phrase(shortened), translation1, translation2, translation3 -->
-<?php foreach ($this->translations as $entity) : 
+<?php //The columns should be: textDomain, phrase(shortened), translation1, translation2, translation3
+foreach ($this->translations as $entity) :
     if (!$this->showAll) {
         $isAllTranslated = true;
         //loop through the locales and check if they've all been translated already
@@ -33,23 +33,31 @@ $this->headTitle($headText);
         }
     }?>
 <tr>
-	<td><?php echo $entity['textDomain'];?></td>
-	<td><a href="<?php echo $this->url('jtranslate/phrase', array('phrase_id' => $entity['phraseId'])); ?>">
+    <td><?php if (is_null($entity['originRoute']) || strlen($entity['originRoute']) < 1) {
+        echo $this->escapeHtml($entity['textDomain']);
+    } else {
+        $tooltip = sprintf($this->translate("Originated from the '%s' route"), $this->escapeHtmlAttr($entity['originRoute']));
+        echo '<span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="'.
+           $tooltip.'">'.$this->escapeHtml($entity['textDomain']).'</span>';
+    };?></td>
+    <td><a href="<?php echo $this->url('jtranslate/phrase', ['phrase_id' => $entity['phraseId']]); ?>">
 <span class="glyphicon glyphicon-pencil"></span></a>&nbsp;<?php echo $this->escapeHtml(Text::truncate($entity['phrase'],100));?></td>
-	<?php foreach ($this->locales as $key => $value) : ?>
-	<td><?php if (isset($entity[$key])) {
-	    if (isset($entity[$key.'ModifiedBy']) && $entity[$key.'ModifiedBy'] &&
-	        isset($entity[$key.'ModifiedOn']) && $entity[$key.'ModifiedOn']) {
-    	    $tooltip = sprintf($this->translate("submitted on %s by %s"), 
-    	        $this->dateFormat($entity[$key.'ModifiedOn'], IntlDateFormatter::SHORT, IntlDateFormatter::NONE),
-    	        $entity[$key.'ModifiedBy']['username']);
-    	    echo '<span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="'.
-    	       $tooltip.'">'.$this->escapeHtml(Text::truncate($entity[$key],100)).'</span>';
-    	    } else {
-    	        echo $this->escapeHtml(Text::truncate($entity[$key],100));
-    	    }
-        }?></td>
-	<?php endforeach;?>
+    <?php foreach ($this->locales as $key => $value) : ?>
+    <td><?php
+    if (isset($entity[$key])) {
+        if (isset($entity[$key.'ModifiedBy']) && $entity[$key.'ModifiedBy'] &&
+            isset($entity[$key.'ModifiedOn']) && $entity[$key.'ModifiedOn']
+        ) {
+            $tooltip = sprintf($this->translate("submitted on %s by %s"),
+                $this->dateFormat($entity[$key.'ModifiedOn'], IntlDateFormatter::SHORT, IntlDateFormatter::NONE),
+                $this->escapeHtmlAttr($entity[$key.'ModifiedBy']['username']));
+            echo '<span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="'.
+               $tooltip.'">'.$this->escapeHtml(Text::truncate($entity[$key],100)).'</span>';
+        } else {
+            echo $this->escapeHtml(Text::truncate($entity[$key],100));
+        }
+    }?></td>
+    <?php endforeach;?>
 </tr>
 <?php endforeach;?>
 </tbody>

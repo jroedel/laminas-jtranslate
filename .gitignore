@@ -3,3 +3,5 @@
 /.project
 /composer.phar
 /tests/
+/vendor/
+/composer.lock
