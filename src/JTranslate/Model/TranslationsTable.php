@@ -397,8 +397,16 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 //if the current text domain is a module, then save it there. If not, to the root.
                 if (key_exists($textDomain, $this->userModules)) {
                     $folder = $this->rootDirectory.'/module/'.$textDomain.'/language';
+                    if (!file_exists($this->rootDirectory.'/module/'.$textDomain)) {
+                        mkdir($this->rootDirectory.'/module/'.$textDomain, 0755, true);
+                        chmod($this->rootDirectory.'/module/'.$textDomain, 0755);
+                    }
                 } else {
                     $folder = $this->rootDirectory.'/language/'.$textDomain;
+                    if (!file_exists($this->rootDirectory.'/language')) {
+                        mkdir($this->rootDirectory.'/language', 0755, true);
+                        chmod($this->rootDirectory.'/language', 0755);
+                    }
                 }
                 if (!is_dir($folder)) {
                     mkdir($folder, 0755, true);
