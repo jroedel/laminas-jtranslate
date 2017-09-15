@@ -21,8 +21,7 @@
         "zendframework/zend-code": "^3.0.2 || ^2.5.0",
         "zendframework/zend-i18n": "^2.5.0",
 		"cakephp/utility": "^3.2.0",
-        "mledoze/countries": "^1.8.0",
-        "jroedel/zf2-juser": "@dev"
+        "mledoze/countries": "^1.8.0"
     },
     "autoload": {
         "psr-0": {
