@@ -39,14 +39,14 @@ class CountriesInfo
      * @var array[\stdClass] $countries
      */
     protected $countries;
-    
+
     protected $namesCache;
-    
+
     protected $translationsCache;
-    
+
     const COUNTRY_NAME_COMMON = 'common';
     const COUNTRY_NAME_OFFICIAL = 'official';
-    
+
     public function __construct($countries)
     {
         //key array
@@ -56,22 +56,22 @@ class CountriesInfo
         }
         $this->countries = $return;
     }
-    
+
     /**
-     * 
+     *
      * @param string $iso2  ISO 3166-1 alpha-2 code
      */
     public function getCountry($iso2)
     {
         $iso2 = strtoupper($iso2);
-        if (isset($countries[$iso2])) {
-            return $countries[$iso2];
+        if (isset($this->countries[$iso2])) {
+            return $this->countries[$iso2];
         }
         return null;
     }
-    
+
     /**
-     * 
+     *
      * @return string[]
      */
     public function getCountryNames()
@@ -86,7 +86,7 @@ class CountriesInfo
         $this->namesCache = $return;
         return $return;
     }
-    
+
     public function getTranslatedCountryNames($language, $commonOrOfficial = 'common')
     {
         $langMap = array(
@@ -106,7 +106,7 @@ class CountriesInfo
             if ($lang == 'eng') {
                 $return[$iso2] = $country->name->$commonOrOfficial;
             } else {
-                if ( property_exists($country->translations, $lang) && 
+                if ( property_exists($country->translations, $lang) &&
                     property_exists($country->translations->$lang, $commonOrOfficial)) {
                     $return[$iso2] = $country->translations->$lang->$commonOrOfficial;
                 } else { //if we don't have the requested language, just return english
@@ -116,9 +116,9 @@ class CountriesInfo
         }
         return $return;
     }
-    
+
     /**
-     * Returns a keyed array with the translations from 
+     * Returns a keyed array with the translations from
      * english to the various languages available
      * array(
      *  "United States" => array(
@@ -128,6 +128,7 @@ class CountriesInfo
      *      )
      *  ...
      * )
+     * @todo make this list dynamic according to the locales registered
      * @return string[][]
      */
     public function getCountryNameTranslations()
@@ -136,18 +137,26 @@ class CountriesInfo
         foreach ($this->countries as $country) {
             $return[$country->name->common] = array(
                 'en_US' => $country->name->common,
-                'de_DE' => $country->translations->deu->common,
-                'pt_BR' => $country->translations->por->common,
-                'es_ES' => $country->translations->spa->common,
-                'fr_FR' => $country->translations->fra->common,
+                'de_DE' => property_exists($country->translations, 'deu') ? $country->translations->deu->common:
+                    $country->name->common,
+                'pt_BR' => property_exists($country->translations, 'por') ? $country->translations->por->common :
+                    $country->name->common,
+                'es_ES' => property_exists($country->translations, 'spa') ? $country->translations->spa->common :
+                    $country->name->common,
+                'fr_FR' => property_exists($country->translations, 'fra') ? $country->translations->fra->common :
+                    $country->name->common,
             );
             if ($country->name->common != $country->name->official) {
                 $return[$country->name->official] = array(
                     'en_US' => $country->name->official,
-                    'de_DE' => $country->translations->deu->official,
-                    'pt_BR' => $country->translations->por->official,
-                    'es_ES' => $country->translations->spa->official,
-                    'fr_FR' => $country->translations->fra->official,
+                    'de_DE' => property_exists($country->translations, 'deu') ? $country->translations->deu->official:
+                        $country->name->official,
+                    'pt_BR' => property_exists($country->translations, 'por') ? $country->translations->por->official:
+                        $country->name->official,
+                    'es_ES' => property_exists($country->translations, 'spa') ? $country->translations->spa->official:
+                        $country->name->official,
+                    'fr_FR' => property_exists($country->translations, 'fra') ? $country->translations->fra->official:
+                        $country->name->official,
                 );
             }
         }
