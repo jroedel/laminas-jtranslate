@@ -8,8 +8,8 @@
 
 namespace JTranslate\Service;
 
-use Zend\ServiceManager\FactoryInterface;
-use Zend\ServiceManager\ServiceLocatorInterface;
+use Zend\ServiceManager\Factory\FactoryInterface;
+use Interop\Container\ContainerInterface;
 
 /**
  * Factory responsible of retrieving an array containing the jtranslate configuration
@@ -19,13 +19,13 @@ use Zend\ServiceManager\ServiceLocatorInterface;
 class ConfigServiceFactory implements FactoryInterface
 {
     /**
-     * {@inheritDoc}
+     * Create an object
      *
-     * @return array
+     * @inheritdoc
      */
-    public function createService(ServiceLocatorInterface $serviceLocator)
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
-        $config = $serviceLocator->get('Config');
+        $config = $container->get('Config');
         
         return $config['jtranslate'];
     }

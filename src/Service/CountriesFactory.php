@@ -1,8 +1,8 @@
 <?php
 namespace JTranslate\Service;
 
-use Zend\ServiceManager\FactoryInterface;
-use Zend\ServiceManager\ServiceLocatorInterface;
+use Zend\ServiceManager\Factory\FactoryInterface;
+use Interop\Container\ContainerInterface;
 use Zend\Json\Json;
 use JTranslate\Model\CountriesInfo;
 
@@ -14,13 +14,11 @@ use JTranslate\Model\CountriesInfo;
 class CountriesFactory implements FactoryInterface
 {
     /**
-     * {@inheritDoc}
+     * Create an object
      *
-     * @return CreateTimelineEventForm
-     * 
-     * @todo make sure this always works...
+     * @inheritdoc
      */
-    public function createService(ServiceLocatorInterface $serviceLocator)
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
         $countries = Json::decode(file_get_contents("vendor/mledoze/countries/dist/countries.json"));
 		$obj = new CountriesInfo($countries);

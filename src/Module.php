@@ -5,31 +5,20 @@ use Zend\Mvc\MvcEvent;
 use JTranslate\I18n\Translator\TranslatorEventListener;
 use JTranslate\Controller\Plugin\NowMessenger;
 use Zend\I18n\Translator\Translator;
-use Zend\Mvc\Router\RouteMatch;
+use Zend\Router\RouteMatch;
+use Zend\Mvc\Controller\AbstractActionController;
+use JTranslate\Model\TranslationsTable;
 
 class Module
 {
-    public function getAutoloaderConfig()
-    {
-        return array(
-            'Zend\Loader\ClassMapAutoloader' => array(
-                __DIR__ . '/autoload_classmap.php',
-            ),
-            'Zend\Loader\StandardAutoloader' => array(
-                'namespaces' => array(
-                    __NAMESPACE__ => __DIR__ . '/src/' . __NAMESPACE__,
-                ),
-            ),
-        );
-    }
-
     public function getConfig()
     {
-        return include __DIR__ . '/config/module.config.php';
+        return include __DIR__ . '/../config/module.config.php';
     }
 
     public function getControllerPluginConfig()
     {
+        // @todo create a factory and move this to config
         return array('factories' => array(
             'nowMessenger' => function ($sm) {
                 $controllerPlugin = new NowMessenger();
@@ -45,7 +34,7 @@ class Module
         //auto-set text domain for all view scripts
         $viewRenderer = $sm->get('ViewRenderer');
         $em->getSharedManager()
-        ->attach('Zend\Mvc\Controller\AbstractActionController', 'dispatch', function($e) use ($viewRenderer) {
+        ->attach(AbstractActionController::class, 'dispatch', function($e) use ($viewRenderer) {
             $controller = $e->getTarget();
             $controllerClass = get_class($controller);
             $moduleNamespace = substr($controllerClass, 0, strpos($controllerClass, '\\'));
@@ -64,9 +53,9 @@ class Module
         }, 100);
 
         $em->attach( MvcEvent::EVENT_FINISH,
-            function ($e) {
+            function (MvcEvent $e) {
                 /** @var \JTranslate\Model\TranslationsTable $table **/
-                $table = $e->getApplication()->getServiceManager()->get('JTranslate\Model\TranslationsTable');
+                $table = $e->getApplication()->getServiceManager()->get(TranslationsTable::class);
 
                 /**
                  *
@@ -89,7 +78,7 @@ class Module
             $translator->setFallbackLocale('en_US'); //@todo make this a configurable value
 
             //attach the translator listener
-            $table = $sm->get('JTranslate\Model\TranslationsTable');
+            $table = $sm->get(TranslationsTable::class);
             $listener = new TranslatorEventListener($table, $table->getLocales());
             $listener->attach($translator->getEventManager());
 

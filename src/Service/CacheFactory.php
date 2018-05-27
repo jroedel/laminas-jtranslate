@@ -10,8 +10,8 @@ namespace JTranslate\Service;
 
 use Zend\Cache\Storage\StorageInterface;
 use Zend\Cache\StorageFactory;
-use Zend\ServiceManager\FactoryInterface;
-use Zend\ServiceManager\ServiceLocatorInterface;
+use Zend\ServiceManager\Factory\FactoryInterface;
+use Interop\Container\ContainerInterface;
 
 /**
  * Factory for building the cache storage
@@ -21,14 +21,13 @@ use Zend\ServiceManager\ServiceLocatorInterface;
 class CacheFactory implements FactoryInterface
 {
     /**
-     * Create a cache
+     * Create an object
      *
-     * @param   ServiceLocatorInterface $serviceLocator
-     * @return  StorageInterface
+     * @inheritdoc
      */
-    public function createService(ServiceLocatorInterface $serviceLocator)
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
-        $options = $serviceLocator->get('JTranslate\Config');
+        $options = $container->get('JTranslate\Config');
 
         return StorageFactory::factory($options['cache_options']);
     }

@@ -23,10 +23,9 @@
 		"cakephp/utility": "^3.2.0",
         "mledoze/countries": "^1.8.0"
     },
-    "autoload": {
-        "psr-0": {
-            "JTranslate": "src"
-        },
-        "classmap" : ["Module.php"]
-    }
+	"autoload": {
+    	"psr-4": {
+        	"JTranslate\\": "module/JTranslate/src/"
+    	}
+	}
 }

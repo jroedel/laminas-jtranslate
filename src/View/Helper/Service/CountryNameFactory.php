@@ -1,8 +1,8 @@
 <?php
 namespace JTranslate\View\Helper\Service;
 
-use Zend\ServiceManager\FactoryInterface;
-use Zend\ServiceManager\ServiceLocatorInterface;
+use Zend\ServiceManager\Factory\FactoryInterface;
+use Interop\Container\ContainerInterface;
 use JTranslate\Model\CountriesInfo;
 use JTranslate\View\Helper\CountryName;
 
@@ -14,15 +14,15 @@ use JTranslate\View\Helper\CountryName;
 class CountryNameFactory implements FactoryInterface
 {
     /**
-     * {@inheritDoc}
+     * Create an object
      *
-     * @return CreateTimelineEventForm
+     * @inheritdoc
      */
-    public function createService(ServiceLocatorInterface $serviceLocator)
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
-        $parentLocator = $serviceLocator->getServiceLocator();
+        $parentLocator = $container->getServiceLocator();
         /** @var CountriesInfo $countries */
-        $countries = $parentLocator->get('CountriesInfo');
+        $countries = $parentLocator->get(CountriesInfo::class);
 		$obj = new CountryName($countries);
 		return $obj;
     }

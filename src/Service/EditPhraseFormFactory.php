@@ -1,8 +1,8 @@
 <?php
 namespace JTranslate\Service;
 
-use Zend\ServiceManager\FactoryInterface;
-use Zend\ServiceManager\ServiceLocatorInterface;
+use Zend\ServiceManager\Factory\FactoryInterface;
+use Interop\Container\ContainerInterface;
 use JTranslate\Model\TranslationsTable;
 use JTranslate\Form\EditPhraseForm;
 
@@ -14,15 +14,15 @@ use JTranslate\Form\EditPhraseForm;
 class EditPhraseFormFactory implements FactoryInterface
 {
     /**
-     * {@inheritDoc}
+     * Create an object
      *
-     * @return CreateTimelineEventForm
+     * @inheritdoc
      */
-    public function createService(ServiceLocatorInterface $serviceLocator)
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
         /** @var TranslationsTable $table **/
-		$table = $serviceLocator->get ( 'JTranslate\Model\TranslationsTable' );
-		$config = $serviceLocator->get ( 'JTranslate\Config' );
+		$table = $container->get ( TranslationsTable::class);
+		$config = $container->get ( 'JTranslate\Config' );
 
 		$locales = $table->getLocales(true);
 		$form = new EditPhraseForm($locales, $config['phrases_table_name'], 

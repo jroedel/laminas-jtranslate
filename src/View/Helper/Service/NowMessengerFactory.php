@@ -9,22 +9,21 @@
 
 namespace JTranslate\View\Helper\Service;
 
-use Zend\ServiceManager\FactoryInterface;
-use Zend\ServiceManager\ServiceLocatorInterface;
+use Zend\ServiceManager\Factory\FactoryInterface;
+use Interop\Container\ContainerInterface;
 use Zend\View\Helper\FlashMessenger;
 use JTranslate\View\Helper\NowMessenger;
 
 class NowMessengerFactory implements FactoryInterface
 {
     /**
-     * Create service
+     * Create an object
      *
-     * @param  ServiceLocatorInterface $serviceLocator
-     * @return FlashMessenger
+     * @inheritdoc
      */
-    public function createService(ServiceLocatorInterface $serviceLocator)
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
-        $serviceLocator = $serviceLocator->getServiceLocator();
+        $serviceLocator = $container->getServiceLocator();
         $helper = new NowMessenger();
         $controllerPluginManager = $serviceLocator->get('ControllerPluginManager');
         $flashMessenger = $controllerPluginManager->get('nowMessenger');

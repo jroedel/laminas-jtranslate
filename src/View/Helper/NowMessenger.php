@@ -18,7 +18,7 @@ use Zend\View\Helper\EscapeHtml;
 /**
  * Helper to proxy the plugin flash messenger
  */
-class NowMessenger extends AbstractTranslatorHelper implements ServiceLocatorAwareInterface
+class NowMessenger extends AbstractTranslatorHelper
 {
     /**
      * Default attributes for the open format tag

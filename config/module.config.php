@@ -1,5 +1,21 @@
 <?php
 namespace JTranslate;
+use JTranslate\Controller\JTranslateController;
+use Zend\Router\Http\Segment;
+use Zend\Router\Http\Literal;
+use JTranslate\View\Helper\Service\FlagFactory;
+use JTranslate\View\Helper\Service\CountryNameFactory;
+use JTranslate\View\Helper\Service\NowMessengerFactory;
+use JTranslate\Service\CacheFactory;
+use JTranslate\Service\ConfigServiceFactory;
+use JTranslate\Service\TranslationsTableFactory;
+use JTranslate\Model\TranslationsTable;
+use JTranslate\Form\EditPhraseForm;
+use JTranslate\Service\EditPhraseFormFactory;
+use JTranslate\Service\CountriesFactory;
+use JTranslate\Model\CountriesInfo;
+use Zend\Db\Adapter\Adapter;
+
 return [
     'jtranslate' => [
         'phrases_table_name' => 'trans_phrases',
@@ -44,35 +60,35 @@ return [
     'router' => [
         'routes' => [
             'jtranslate' => [
-                'type'    => 'Literal',
+                'type'    => Literal::class,
                 'options' => [
                     'route'    => '/admin/translations',
                     'defaults' => [
-                        'controller' => 'JTranslate\Controller\JTranslate',
+                        'controller' => JTranslateController::class,
                         'action'     => 'index',
                     ],
                 ],
                 'may_terminate' => true,
                 'child_routes' => [
                     'clear-cache' => [
-                        'type'    => 'Literal',
+                        'type'    => Literal::class,
                         'options' => [
                             'route'    => '/clear-cache',
                             'defaults' => [
-                                'controller' => 'JTranslate\Controller\JTranslate',
+                                'controller' => JTranslateController::class,
                                 'action'     => 'clearCache',
                             ],
                         ],
                      ],
                     'phrase' => [
-                        'type'    => 'Segment',
+                        'type'    => Segment::class,
                         'options' => [
                             'route'    => '/:phrase_id/edit',
                             'constraints' => [
                                 'course_id' => '[0-9]{1,5}',
                             ],
                             'defaults' => [
-                                'controller' => 'JTranslate\Controller\JTranslate',
+                                'controller' => JTranslateController::class,
                                 'action'     => 'edit',
                             ],
                         ],
@@ -83,10 +99,14 @@ return [
     ],
     'controllers' => [
         'invokables' => [
-            'JTranslate\Controller\JTranslate' => 'JTranslate\Controller\JTranslateController',
+            //JTranslateController::class => JTranslateController::class,
+        ],
+        'abstract_factories' => [
+            \JTranslate\Controller\LazyControllerFactory::class,
         ],
     ],
     'view_manager' => [
+        'template_map' => include __DIR__ . '/template_map.config.php',
         'template_path_stack' => [
             'jtranslate' => __DIR__ . '/../view',
         ],
@@ -94,21 +114,21 @@ return [
 
     'view_helpers' => [
         'factories' => [
-            'flag'					=> 'JTranslate\View\Helper\Service\FlagFactory',
-            'countryName'			=> 'JTranslate\View\Helper\Service\CountryNameFactory',
-            'nowMessenger'	        => 'JTranslate\View\Helper\Service\NowMessengerFactory',
+            'flag'					=> FlagFactory::class,
+            'countryName'			=> CountryNameFactory::class,
+            'nowMessenger'	        => NowMessengerFactory::class,
         ],
     ],
     'service_manager' => [
         'factories' => [
-            'JTranslate\Cache'                    => 'JTranslate\Service\CacheFactory',
-            'JTranslate\Config'                   => 'JTranslate\Service\ConfigServiceFactory',
-            'JTranslate\Model\TranslationsTable'  => 'JTranslate\Service\TranslationsTableFactory',
-            'JTranslate\Form\EditPhraseForm'      => 'JTranslate\Service\EditPhraseFormFactory',
-            'CountriesInfo'                       => 'JTranslate\Service\CountriesFactory',
+            'JTranslate\Cache'          => CacheFactory::class,
+            'JTranslate\Config'         => ConfigServiceFactory::class,
+            TranslationsTable::class    => TranslationsTableFactory::class,
+            EditPhraseForm::class       => EditPhraseFormFactory::class,
+            CountriesInfo::class        => CountriesFactory::class,
         ],
         'aliases' => [
-            'jtranslate_db_adapter' => 'Zend\Db\Adapter\Adapter',
+            'jtranslate_db_adapter' => Adapter::class,
             'jtranslate_translator' => 'MvcTranslator',
         ],
     ],

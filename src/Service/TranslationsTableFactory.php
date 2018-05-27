@@ -1,11 +1,12 @@
 <?php
 namespace JTranslate\Service;
 
-use Zend\ServiceManager\FactoryInterface;
-use Zend\ServiceManager\ServiceLocatorInterface;
+use Zend\ServiceManager\Factory\FactoryInterface;
+use Interop\Container\ContainerInterface;
 use Zend\Db\Adapter\Adapter;
 use JTranslate\Model\TranslationsTable;
 use Zend\Db\TableGateway\TableGateway;
+use JUser\Model\UserTable;
 
 /**
  * Factory responsible of building the {@see TranslationsTable} service
@@ -15,16 +16,16 @@ use Zend\Db\TableGateway\TableGateway;
 class TranslationsTableFactory implements FactoryInterface
 {
     /**
-     * {@inheritDoc}
+     * Create an object
      *
-     * @return TranslationsTable
+     * @inheritdoc
      */
-    public function createService(ServiceLocatorInterface $serviceLocator)
+    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
         /** @var Adapter $adapter */ 
-        $adapter = $serviceLocator->get('Zend\Db\Adapter\Adapter');
-        $cache = $serviceLocator->get('JTranslate\Cache');
-        $config = $serviceLocator->get('JTranslate\Config');
+        $adapter = $container->get(Adapter::class);
+        $cache = $container->get('JTranslate\Cache');
+        $config = $container->get('JTranslate\Config');
         $translationsTableName = $config['translations_table_name'] ? $config['translations_table_name'] : 'trans_translations';
         $phrasesTableName = $config['phrases_table_name'] ? $config['phrases_table_name'] : 'trans_phrases';
         $translationsGateway = new TableGateway($translationsTableName, $adapter);
@@ -32,9 +33,9 @@ class TranslationsTableFactory implements FactoryInterface
         $rootDirectory = isset($config['root_directory']) ? $config['root_directory'] : getcwd();
 
         /** @var  User $userService **/
-        $userService = $serviceLocator->get('zfcuser_user_service');
+        $userService = $container->get('zfcuser_user_service');
         $user = $userService->getAuthService()->getIdentity();
-        $userTable = $serviceLocator->get('JUser\Model\UserTable');
+        $userTable = $container->get(UserTable::class);
         $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable, $rootDirectory);
         return $table;
     }
