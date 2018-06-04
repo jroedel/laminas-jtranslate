@@ -8,8 +8,11 @@ use Zend\I18n\Translator\Translator;
 use Zend\Router\RouteMatch;
 use Zend\Mvc\Controller\AbstractActionController;
 use JTranslate\Model\TranslationsTable;
+use Zend\ModuleManager\ModuleManager;
+use Zend\EventManager\EventInterface;
+use Zend\ModuleManager\Feature\BootstrapListenerInterface;
 
-class Module
+class Module implements BootstrapListenerInterface
 {
     public function getConfig()
     {
@@ -27,10 +30,12 @@ class Module
         ));
     }
 
-    public function onBootstrap(MvcEvent $e)
+    public function onBootstrap(EventInterface $e)
     {
-        $sm = $e->getApplication()->getServiceManager();
-        $em = $e->getApplication()->getEventManager();
+        /** @var $app \Zend\Mvc\ApplicationInterface */
+        $app = $e->getTarget();
+        $sm = $app->getServiceManager();
+        $em = $app->getEventManager();
         //auto-set text domain for all view scripts
         $viewRenderer = $sm->get('ViewRenderer');
         $em->getSharedManager()
@@ -71,9 +76,6 @@ class Module
             /** @var Translator $translator */
             $translator = $sm->get('jtranslate_translator');
             $translator->enableEventManager();
-    //         if (isset($_SERVER['HTTP_ACCEPT_LANGUAGE']))
-    //             $translator->setLocale(\Locale::acceptFromHttp($_SERVER['HTTP_ACCEPT_LANGUAGE']));
-
             $translator->setLocale(\Locale::getDefault());
             $translator->setFallbackLocale('en_US'); //@todo make this a configurable value
 
@@ -83,7 +85,7 @@ class Module
             $listener->attach($translator->getEventManager());
 
             //add patterns to the translator
-            $manager        = $sm->get('ModuleManager');
+            $manager        = $sm->get(ModuleManager::class);
             $loadedModules  = $manager->getLoadedModules();
             $modules        = [];
             foreach(glob('module/*', GLOB_ONLYDIR) as $dir) {

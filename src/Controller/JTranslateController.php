@@ -3,8 +3,9 @@ namespace JTranslate\Controller;
 
 use Zend\Mvc\Controller\AbstractActionController;
 use Zend\View\Model\ViewModel;
-use Zend\Mvc\Controller\Plugin\FlashMessenger;
+use Zend\Mvc\Plugin\FlashMessenger\FlashMessenger;
 use JTranslate\Model\TranslationsTable;
+use JTranslate\Form\EditPhraseForm;
 
 /**
  *
@@ -12,24 +13,39 @@ use JTranslate\Model\TranslationsTable;
  */
 class JTranslateController extends AbstractActionController
 {
+    /**
+     * @var TranslationsTable $translationsTable
+     */
+    protected $translationsTable;
+    
+    /**
+     * @var EditPhraseForm $editPhraseForm
+     */
+    protected $editPhraseForm;
+    
+    public function __construct(TranslationsTable $translationsTable, EditPhraseForm $editPhraseForm)
+    {
+        $this->translationsTable = $translationsTable;
+        $this->editPhraseForm = $editPhraseForm;
+    }
+    
     public function indexAction()
     {
         /** @var \JTranslate\Model\TranslationsTable $table */
-        $table = $this->getServiceLocator()->get('JTranslate\Model\TranslationsTable');
+        $table = $this->translationsTable;
         $showAll = $this->params()->fromQuery('showAll') == "true";
         $translations = $table->getTranslations();
         $locales = $table->getLocales();
-        return new ViewModel(array(
+        return [
             'translations'  => $translations,
             'locales'       => $locales,
             'showAll'       => $showAll,
-        ));
+        ];
     }
 
     public function editAction() {
-        $sm = $this->getServiceLocator ();
         /** @var TranslationsTable $table **/
-        $table = $sm->get ( 'JTranslate\Model\TranslationsTable' );
+        $table = $this->translationsTable;
         $id = ( int ) $this->params ()->fromRoute ( 'phrase_id' );
         if (! $id) {
             $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Phrase not found.' );
@@ -43,7 +59,7 @@ class JTranslateController extends AbstractActionController
             return $this->redirect ()->toRoute ( 'jtranslate' );
         }
         $locales = $table->getLocales(true);
-        $form = $sm->get('JTranslate\Form\EditPhraseForm');
+        $form = $this->editPhraseForm;
         
         $request = $this->getRequest ();
         if ($request->isPost ()) {
@@ -51,12 +67,12 @@ class JTranslateController extends AbstractActionController
             $form->setData($data);
             if ($data ['phraseId'] != $id) { // make sure the user is trying to update the right phrase
                 $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Error in form submission, please review.' );
-                return array (
+                return [
                     'phrase' => $phrase,
                     'phraseId' => $id,
                     'locales' => $locales,
                     'form' => $form,
-                );
+                ];
             }
             if ($form->isValid()) {
                 try {
@@ -74,11 +90,11 @@ class JTranslateController extends AbstractActionController
         } else {
             $form->setData($phrase);
         }
-        return array (
+        return [
             'phrase' => $phrase,
             'phraseId' => $id,
             'form' => $form,
             'locales' => $locales
-        );
+        ];
     }
 }

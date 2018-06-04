@@ -25,9 +25,9 @@ class TranslatorEventListener extends AbstractListenerAggregate
         $this->locales  = $locales;
     }
     
-    public function attach(EventManagerInterface $events)
+    public function attach(EventManagerInterface $events, $priority = 1)
     {
-        $this->listeners[] = $events->attach(Translator::EVENT_MISSING_TRANSLATION, array($this, 'missingTranslation'));
+        $this->listeners[] = $events->attach(Translator::EVENT_MISSING_TRANSLATION, array($this, 'missingTranslation'), $priority);
     }
     
     /**

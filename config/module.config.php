@@ -15,6 +15,7 @@ use JTranslate\Service\EditPhraseFormFactory;
 use JTranslate\Service\CountriesFactory;
 use JTranslate\Model\CountriesInfo;
 use Zend\Db\Adapter\Adapter;
+use Zend\Mvc\I18n\Translator;
 
 return [
     'jtranslate' => [
@@ -129,7 +130,7 @@ return [
         ],
         'aliases' => [
             'jtranslate_db_adapter' => Adapter::class,
-            'jtranslate_translator' => 'MvcTranslator',
+            'jtranslate_translator' => Translator::class,
         ],
     ],
 ];
