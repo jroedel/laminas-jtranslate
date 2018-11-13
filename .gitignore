@@ -5,6 +5,7 @@
 /tests/
 /vendor/
 /composer.lock
-/phploy.ini
-/phploy.phar
-/phploy.log
+phploy.ini
+phploy.log
+.phploy
+
