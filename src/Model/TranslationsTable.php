@@ -164,10 +164,10 @@ ORDER BY `text_domain`, `phrase`";
             if (isset($return[$tran['translation_phrase_id']])) {
                 $return[$tran['translation_phrase_id']][$tran['locale']] = $tran['translation'];
                 $return[$tran['translation_phrase_id']][$tran['locale'].'Id'] = $tran['translation_id'];
-                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedBy'] = $tran['modified_by'] ?
+                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedBy'] = isset($tran['modified_by']) ?
                         $userTable->getUser($tran['modified_by']) : null;
-                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedOn'] = $tran['modified_on'] ?
-                        new \DateTime($tran['modified_on'], $utc) : null;
+                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedOn'] = isset($tran['modified_on']) ?
+                    \DateTime::createFromFormat('Y-m-d H:i:s', $tran['modified_on'], $utc) : null;
             } else {
                 $return[$tran['translation_phrase_id']] = [
                     'phraseId' => $tran['translation_phrase_id'],
@@ -176,7 +176,7 @@ ORDER BY `text_domain`, `phrase`";
                     $tran['locale'].'ModifiedBy'=> $tran['modified_by'] ?
                         $userTable->getUser($tran['modified_by']) : null,
                     $tran['locale'].'ModifiedOn'=> $tran['modified_on'] ?
-                        new \DateTime($tran['modified_on'], $utc) : null,
+                        \DateTime::createFromFormat('Y-m-d H:i:s', $tran['modified_on'], $utc) : null,
                     'textDomain'                => $tran['text_domain'],
                     'phrase'                    => $tran['phrase'],
                     'originRoute'               => $tran['origin_route'],

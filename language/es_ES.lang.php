@@ -1,5 +1,5 @@
 <?php
 
-return array(
+return [
     'Schoenstatt Link' => 'Schoenstatt Link',
-);
+];
