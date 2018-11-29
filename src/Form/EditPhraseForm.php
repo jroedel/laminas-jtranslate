@@ -48,11 +48,12 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
 		));
 		$this->add(array(
 			'name' => 'phrase',
-			'type' => 'Text',
+			'type' => 'Textarea',
 			'options' => array(
 				'label' => 'Phrase',
 			),
 			'attributes' => array(
+			    'rows' => 2,
 			    'readonly' => true,
 			),
 		));
@@ -60,11 +61,12 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
 		foreach ($locales as $key => $value) {
     		$this->add(array(
     			'name' => $key,
-    			'type' => 'Text',
+    			'type' => 'Textarea',
     			'options' => array(
     				'label' => $value,
     			),
-    			'attributes' => array(
+    		    'attributes' => array(
+    		        'rows' => 2,
     			),
     		));
 
