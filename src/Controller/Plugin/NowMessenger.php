@@ -51,7 +51,7 @@ class NowMessenger extends AbstractPlugin
      * Useful for per action controller messaging between requests
      *
      * @param  string         $namespace
-     * @return FlashMessenger Provides a fluent interface
+     * @return self Provides a fluent interface
      */
     public function setNamespace($namespace = 'default')
     {

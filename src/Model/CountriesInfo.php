@@ -54,6 +54,29 @@ class CountriesInfo
         foreach ($countries as $obj) {
             $return[$obj->cca2] = $obj;
         }
+        //add scotland manually
+        $scotland = unserialize(serialize($return['GB']));
+        $scotland->name->common = 'Scotland';
+        $scotland->name->official = 'Scotland';
+        $scotland->name->native->eng->official = 'Scotland';
+        $scotland->name->native->eng->common = 'Scotland';
+        $scotland->tld[0] = '.scot';
+        $scotland->cca2 = 'GB-SCT';
+        $scotland->ccn3 = 'GB-SCT';
+        $scotland->cca3 = '';
+        $scotland->cioc = '';
+        $scotland->capital = 'Edinburgh';
+        $scotland->translations->deu->official = 'Schottland';
+        $scotland->translations->deu->common = 'Schottland';
+        $scotland->translations->fra->official = 'Écosse';
+        $scotland->translations->fra->common = 'Écosse';
+        $scotland->translations->spa->official = 'Escocia';
+        $scotland->translations->spa->common = 'Escocia';
+        $scotland->translations->por->official = 'Escócia';
+        $scotland->translations->por->common = 'Escócia';
+        $scotland->demonym = 'Scottish';
+        $scotland->area = '77933';
+        $return['GB-SCT'] = $scotland;
         $this->countries = $return;
     }
 

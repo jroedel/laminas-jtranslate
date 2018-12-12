@@ -10,10 +10,11 @@
 namespace JTranslate\View\Helper;
 
 use JTranslate\Controller\Plugin\NowMessenger as PluginNowMessenger;
-use Zend\ServiceManager\ServiceLocatorAwareInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 use Zend\I18n\View\Helper\AbstractTranslatorHelper;
 use Zend\View\Helper\EscapeHtml;
+use Zend\Mvc\Plugin\FlashMessenger\FlashMessenger;
+use Zend\View\Helper\AbstractHelper;
 
 /**
  * Helper to proxy the plugin flash messenger
@@ -63,7 +64,7 @@ class NowMessenger extends AbstractTranslatorHelper
     /**
      * Flash messenger plugin
      *
-     * @var PluginFlashMessenger
+     * @var FlashMessenger
      */
     protected $pluginFlashMessenger;
 
