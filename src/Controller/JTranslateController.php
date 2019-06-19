@@ -34,11 +34,25 @@ class JTranslateController extends AbstractActionController
         /** @var \JTranslate\Model\TranslationsTable $table */
         $table = $this->translationsTable;
         $showAll = $this->params()->fromQuery('showAll') == "true";
+        $localesSelected = $this->params()->fromQuery('locale');
         $translations = $table->getTranslations();
         $locales = $table->getLocales();
+        $finalLocales = [];
+        if (is_string($localesSelected) && isset($locales[$localesSelected])) {
+            $finalLocales[$localesSelected] = $locales[$localesSelected];
+        } elseif (is_array($localesSelected)) {
+            foreach ($localesSelected as $locale) {
+                if (isset($locales[$locale])) {
+                    $finalLocales[$locale] = $locales[$locale];
+                }
+            }
+        }
+        if (empty($finalLocales)) {
+            $finalLocales = $locales;
+        }
         return [
             'translations'  => $translations,
-            'locales'       => $locales,
+            'locales'       => $finalLocales,
             'showAll'       => $showAll,
         ];
     }

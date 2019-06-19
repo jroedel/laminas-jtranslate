@@ -24,7 +24,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
     /**
      *
-     * @var array
+     * @var array $translationsCache
      */
     protected $translationsCache;
     /**
@@ -40,7 +40,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
     /**
      *
-     * @var AdapterInterface
+     * @var AdapterInterface $adapter
      */
     protected $adapter;
 
@@ -58,7 +58,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
     /**
      *
-     * @var \Iterator
+     * @var \Traversable $config
      */
     protected $config;
 
@@ -70,31 +70,31 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
     /**
      *
-     * @var UserInterface
+     * @var UserInterface $actingUser
      */
     protected $actingUser;
 
     /**
      *
-     * @var UserTable
+     * @var UserTable $userTable
      */
     protected $userTable;
 
     /**
      *
-     * @var array
+     * @var array $arrayFilePatterns
      */
     protected $arrayFilePatterns;
 
     /**
      *
-     * @var array
+     * @var array $userModules
      */
     protected $userModules;
 
     /**
      * The full path to the root of the MVC project
-     * @var string
+     * @var string $rootDirectory
      */
     protected $rootDirectory;
 
@@ -104,7 +104,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      *
      * @param TableGatewayInterface $gateway
      * @param StorageInterface $cache
-     * @param unknown $config
+     * @param array $config
      * @todo throw error if no project_name config key exists
      */
     public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUser, $userTable, $rootDirectory)
