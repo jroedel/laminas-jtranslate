@@ -4,8 +4,6 @@ $headText = 'Edit Translation';
 $this->headTitle($headText); ?>
 <h1><?php echo $this->translate($headText);?></h1>
 <?php $form = $this->form;
-$form->setAttribute('action', $this->url('jtranslate/phrase', 
-		array('action' => 'edit', 'phrase_id' => $this->phraseId)));
  $form->prepare();
  echo $this->form()->openTag($form); 
  echo $this->formHidden($form->get('phraseId'));

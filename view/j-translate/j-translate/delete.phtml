@@ -1,0 +1,16 @@
+<?php $headText = 'Delete '.$this->escapeHtml($this->entity);
+$this->headTitle($headText); ?>
+<h1><?= $this->translate($headText)?></h1>
+<?php
+$warning = "Are you sure you want to delete the phrase \"%s\" from the translation database? "
+    ."Only delete if you're sure this translation is no longer used, otherwise it will reappear "
+    ."the next time the website encounters the same string.";?>
+<p><?= sprintf($this->translate($warning), $this->entityObject['phrase'])?></p>
+<?php $form = $this->form;
+$form->prepare();
+echo $this->form()->openTag($form);
+echo $this->formRow($form->get('security'));
+echo $this->formSubmit($form->get('submit'));
+echo '&nbsp;';
+echo $this->formButton($form->get('cancel'));
+echo $this->form()->closeTag();

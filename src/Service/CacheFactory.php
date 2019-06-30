@@ -8,7 +8,6 @@
 
 namespace JTranslate\Service;
 
-use Zend\Cache\Storage\StorageInterface;
 use Zend\Cache\StorageFactory;
 use Zend\ServiceManager\Factory\FactoryInterface;
 use Interop\Container\ContainerInterface;
@@ -29,6 +28,7 @@ class CacheFactory implements FactoryInterface
     {
         $options = $container->get('JTranslate\Config');
 
-        return StorageFactory::factory($options['cache_options']);
+        $cache = StorageFactory::factory($options['cache_options']);
+        return $cache;
     }
 }

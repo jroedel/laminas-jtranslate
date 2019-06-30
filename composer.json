@@ -1,8 +1,8 @@
 {
-    "name": "jroedel/zf2-jtranslate",
+    "name": "jroedel/zf3-jtranslate",
     "type": "library",
-    "description": "Zend Framework 2 module to provide a translation GUI",
-    "keywords": ["Zend Framework 2","translation", "gui"],
+    "description": "Zend Framework 3 module to provide a translation GUI",
+    "keywords": ["Zend Framework 3","translation", "gui"],
     "homepage": "https://github.com/jroedel/zf2-jtranslate",
     "license": "MIT",
     "authors": [

@@ -25,6 +25,7 @@ class TranslationsTableFactory implements FactoryInterface
         /** @var Adapter $adapter */ 
         $adapter = $container->get(Adapter::class);
         $cache = $container->get('JTranslate\Cache');
+        $em = $container->get('Application')->getEventManager();
         $config = $container->get('JTranslate\Config');
         $translationsTableName = $config['translations_table_name'] ? $config['translations_table_name'] : 'trans_translations';
         $phrasesTableName = $config['phrases_table_name'] ? $config['phrases_table_name'] : 'trans_phrases';
@@ -36,7 +37,7 @@ class TranslationsTableFactory implements FactoryInterface
         $userService = $container->get('zfcuser_user_service');
         $user = $userService->getAuthService()->getIdentity();
         $userTable = $container->get(UserTable::class);
-        $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable, $rootDirectory);
+        $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable, $rootDirectory, $em);
         return $table;
     }
 }

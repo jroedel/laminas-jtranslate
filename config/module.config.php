@@ -16,6 +16,7 @@ use JTranslate\Service\CountriesFactory;
 use JTranslate\Model\CountriesInfo;
 use Zend\Db\Adapter\Adapter;
 use Zend\Mvc\I18n\Translator;
+use Zend\Serializer\Adapter\Json;
 
 return [
     'jtranslate' => [
@@ -36,15 +37,17 @@ return [
                 // With a namespace we can indicate the same type of items
                 // -> So we can simple use the db id as cache key
                 'options' => [
+                    'ttl'       => 3600*24, //1 day
                     'namespace' => 'JTranslate'
                 ],
             ],
             'plugins' => [
-                // Don't throw exceptions on cache errors
-                //'exception_handler' => [
-                //    'throw_exceptions' => false
-                //],
-                'Serializer'
+                [
+                    'name' => 'serializer',
+                    'options' => [
+                        'serializer' => Json::class,
+                    ],
+                ],
             ],
         ],
     ],
@@ -84,13 +87,30 @@ return [
                     'phrase' => [
                         'type'    => Segment::class,
                         'options' => [
-                            'route'    => '/:phrase_id/edit',
+                            'route'    => '/:phrase_id',
                             'constraints' => [
-                                'course_id' => '[0-9]{1,5}',
+                                'phrase_id' => '[0-9]{1,5}',
                             ],
-                            'defaults' => [
-                                'controller' => JTranslateController::class,
-                                'action'     => 'edit',
+                        ],
+                        'may_terminate' => false,
+                        'child_routes' => [
+                            'edit' => [
+                                'type'    => Literal::class,
+                                'options' => [
+                                    'route'    => '/edit',
+                                    'defaults' => [
+                                        'action'     => 'edit',
+                                    ],
+                                ],
+                            ],
+                            'delete' => [
+                                'type'    => Literal::class,
+                                'options' => [
+                                    'route'    => '/delete',
+                                    'defaults' => [
+                                        'action'     => 'delete',
+                                    ],
+                                ],
                             ],
                         ],
                      ],
@@ -104,6 +124,11 @@ return [
         ],
         'abstract_factories' => [
             \JTranslate\Controller\LazyControllerFactory::class,
+        ],
+    ],
+    'controller_plugins' => [
+        'invokables' => [
+            'nowMessenger' => Controller\Plugin\NowMessenger::class,
         ],
     ],
     'view_manager' => [

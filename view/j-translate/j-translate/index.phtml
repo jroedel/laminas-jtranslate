@@ -40,8 +40,9 @@ foreach ($this->translations as $entity) :
         echo '<span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="'.
            $tooltip.'">'.$this->escapeHtml($entity['textDomain']).'</span>';
     };?></td>
-    <td><a href="<?php echo $this->url('jtranslate/phrase', ['phrase_id' => $entity['phraseId']]); ?>">
-<span class="glyphicon glyphicon-pencil"></span></a>&nbsp;<?php echo $this->escapeHtml(Text::truncate($entity['phrase'],100));?></td>
+    <td><a href="<?php echo $this->url('jtranslate/phrase/edit', ['phrase_id' => $entity['phraseId']]); ?>">
+<span class="glyphicon glyphicon-pencil"></span></a><a href="<?php echo $this->url('jtranslate/phrase/delete', ['phrase_id' => $entity['phraseId']]); ?>">
+<span class="glyphicon glyphicon-remove"></span></a>&nbsp;<?php echo $this->escapeHtml(Text::truncate($entity['phrase'],100));?></td>
     <?php foreach ($this->locales as $key => $value) : ?>
     <td><?php
     if (isset($entity[$key])) {

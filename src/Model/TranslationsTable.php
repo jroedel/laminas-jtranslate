@@ -13,25 +13,19 @@ use ZfcUser\Entity\UserInterface;
 use JUser\Model\UserTable;
 use Zend\Code\Generator\ValueGenerator;
 use Zend\Code\Generator\FileGenerator;
+use Zend\Db\ResultSet\ResultSet;
+use SionModel\Db\Model\SionCacheTrait;
+use Zend\Mvc\MvcEvent;
 
 class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
 {
+    use SionCacheTrait;
+    
     /**
      *
      * @var array $phrasesInDb
      */
     protected $phrasesInDb;
-
-    /**
-     *
-     * @var array $translationsCache
-     */
-    protected $translationsCache;
-    /**
-     *
-     * @var array $tableCache
-     */
-    protected $phrasesCache;
     /**
      *
      * @var array $newMissingTranslations
@@ -61,12 +55,6 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      * @var \Traversable $config
      */
     protected $config;
-
-    /**
-     *
-     * @var StorageInterface $cache
-     */
-    protected $cache;
 
     /**
      *
@@ -107,18 +95,23 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      * @param array $config
      * @todo throw error if no project_name config key exists
      */
-    public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUser, $userTable, $rootDirectory)
+    public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUser, $userTable, $rootDirectory, $eventManager)
     {
         $this->phrasesGateway       = $phrasesGateway;
         $this->translationsGateway  = $translationsGateway;
         $this->adapter              = $phrasesGateway->getAdapter();
-        $this->cache                = $cache;
         $this->config               = $config;
-        $this->phrasesInDb          = $this->getPhraseKeysFromDb();
         $this->actingUser           = $actingUser;
         $this->userTable            = $userTable;
         $this->newMissingPhrases    = [];
-
+        
+        if (isset($cache)) {
+            $this->setPersistentCache($cache);
+            $this->wireOnFinishTrigger($eventManager);
+        }
+        $eventManager->attach(MvcEvent::EVENT_FINISH, [$this, 'finishUp'], -1);
+        
+        $this->phrasesInDb          = $this->getPhraseKeysFromDb();
         $this->setRootDirectory($rootDirectory);
     }
 
@@ -141,8 +134,12 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      */
     public function getTranslations($fromAllProjects = false)
     {
-        if ($this->translationsCache && !$fromAllProjects) {
-            return $this->translationsCache;
+        $cacheKey = 'translations';
+        if ($fromAllProjects) {
+            $cacheKey.='-from-all-projects';
+        }
+        if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
+            return $cache;
         }
         $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`, t.`locale`,t.`translation`,
 t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`, p.`origin_route`
@@ -184,7 +181,7 @@ ORDER BY `text_domain`, `phrase`";
                 ];
             }
         }
-        $this->translationsCache = $return;
+        $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
     }
 
@@ -207,9 +204,6 @@ HAVING PhraseLocaleCount < ?";
 
     public function getPhrase($id)
     {
-        if ($this->translationsCache) {
-            return $this->translationsCache[$id];
-        }
         return $this->getTranslations()[$id];
     }
 
@@ -218,8 +212,9 @@ HAVING PhraseLocaleCount < ?";
         $phrase = $this->getTranslations()[$id];
         $dateString = date_format((new \DateTime(null, new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
 
+        $locales = array_keys($this->getLocales(true));
         $results = [];
-        foreach ($this->getLocales(true) as $key => $value) {
+        foreach ($locales as $key) {
             if (!isset($data[$key]) || !$data[$key] ||
                 (isset($phrase[$key]) && $data[$key] === $phrase[$key])) { //in the case that they didn't write anything, continue
                 continue;
@@ -231,7 +226,7 @@ HAVING PhraseLocaleCount < ?";
                     ->set([
                         'translation' => $data[$key],
                         'modified_on' => $dateString,
-                        'modified_by' => !is_null($this->actingUser) ? $this->actingUser->id : null,
+                        'modified_by' => isset($this->actingUser) ? $this->actingUser->id : null,
                     ])
                     ->where(['translation_id' => $data[$key.'Id']]);
                 $statement = $sql->prepareStatementForSqlObject($update);
@@ -245,13 +240,59 @@ HAVING PhraseLocaleCount < ?";
                     'locale' => $key,
                     'translation' => $data[$key],
                     'modified_on' => $dateString,
-                    'modified_by' => !is_null($this->actingUser) ? $this->actingUser->id : null,
+                    'modified_by' => isset($this->actingUser) ? $this->actingUser->id : null,
                 ]);
                 $statement = $sql->prepareStatementForSqlObject($insert);
                 $results[] = $statement->execute();
             }
         }
+        $this->removeDependentCacheItems('phrase');
         return $results;
+    }
+    
+    /**
+     * Check if an entity exists
+     * @param string $entity
+     * @param number|string $id
+     * @throws \Exception
+     * @return boolean
+     */
+    public function existsPhrase($id)
+    {
+        $tableKey   = 'translation_phrase_id';
+        $gateway    = $this->phrasesGateway;
+        $result     = $gateway->select([$tableKey => $id]);
+        if (!$result instanceof ResultSet || 0 === $result->count()) {
+            return false;
+        }
+        if ($result->count() > 1) {
+            throw new \Exception('Something weird. Multiple records returned.');
+        }
+        return true;
+    }
+    
+    
+    public function deletePhrase($id, $refreshCache = true)
+    {
+        //make sure entity exists before attempting to delete
+        if (!$this->existsPhrase($id)) {
+            throw new \Exception('The requested phrase for deletion '.$id.' does not exist.');
+        }
+        $gateway = $this->translationsGateway;
+        $return = $gateway->delete(['translation_phrase_id' => $id]);
+        
+        $gateway = $this->phrasesGateway;
+        $return = $gateway->delete(['translation_phrase_id' => $id]);
+        
+        if ($return !== 1) {
+            throw new \Exception('Delete action expected a return code of \'1\', received \''.$return.'\'');
+        }
+        
+        if ($refreshCache) {
+            $this->removeDependentCacheItems('phrase');
+        }
+        
+        return $return;
     }
 
     /**
@@ -281,8 +322,9 @@ HAVING PhraseLocaleCount < ?";
      */
     public function getPhraseKeysFromDb()
     {
-        if ($this->phrasesCache) {
-            return $this->phrasesCache;
+        $cacheKey = 'phrase-keys';
+        if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
+            return $cache;
         }
         $where = new Sql($this->adapter);
         $where  ->select($this->config['phrases_table_name'])
@@ -306,7 +348,7 @@ HAVING PhraseLocaleCount < ?";
                 ];
             }
         }
-        $this->phrasesCache = $return;
+        $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
     }
 
@@ -316,12 +358,12 @@ HAVING PhraseLocaleCount < ?";
      */
     protected function addMissingPhrase($params)
     {
-        if (!key_exists($params['text_domain'], $this->phrasesInDb)) {
+        if (!isset($this->phrasesInDb[$params['text_domain']])) {
             $this->phrasesInDb[$params['text_domain']] = [$params['message']];
         } else {
             $this->phrasesInDb[$params['text_domain']][] = $params['message'];
         }
-        if (!key_exists($params['text_domain'], $this->newMissingPhrases)) {
+        if (!isset($this->newMissingPhrases[$params['text_domain']])) {
             $this->newMissingPhrases[$params['text_domain']] = [$params['message']];
         } else {
             $this->newMissingPhrases[$params['text_domain']][] = $params['message'];
@@ -335,7 +377,7 @@ HAVING PhraseLocaleCount < ?";
      */
     public function reportMissingTranslation($params)
     {
-        if (!key_exists($params['text_domain'], $this->phrasesInDb) ||
+        if (!isset($this->phrasesInDb[$params['text_domain']]) ||
             !in_array($params['message'], $this->phrasesInDb[$params['text_domain']])) {
             $this->addMissingPhrase($params);
         }
@@ -348,6 +390,10 @@ HAVING PhraseLocaleCount < ?";
      */
     public function getTranslatedText()
     {
+        $cacheKey = 'translated-text';
+        if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
+            return $cache;
+        }
         $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`,
 t.`locale`, t.`translation`, p.`text_domain`,  p.`phrase`
 FROM `trans_phrases` p
@@ -375,7 +421,14 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 ];
             }
         }
+        $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
+    }
+    
+    public function finishUp(MvcEvent $e)
+    {
+        $match = $e->getRouteMatch();
+        $this->writeMissingPhrasesToDb($match ? $match->getMatchedRouteName() : null);
     }
 
     /**
@@ -438,7 +491,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         $result = [];
         foreach ($this->newMissingPhrases as $textDomain => $phrases) {
             foreach ($phrases as $phrase) {
-                if (is_null($phrase)) {
+                if (!isset($phrase)) {
                     continue;
                 }
                 //insert into phrases table
@@ -472,7 +525,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                                         'modified_by' => (isset($translationPhrase[$locale.'ModifiedBy']) &&
                                             isset($translationPhrase[$locale.'ModifiedBy']['userId'])) ?
                                             $translationPhrase[$locale.'ModifiedBy']['userId'] :
-                                            (!is_null($this->actingUser) ? $this->actingUser->id : null),
+                                            (isset($this->actingUser) ? $this->actingUser->id : null),
                                         'modified_on' => $dateString,
                                     ];
                                 }
@@ -491,7 +544,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                         'translation_phrase_id' => $phrasesKeyId,
                         'locale' => $this->config['key_locale'],
                         'translation' => $phrase,
-                        'modified_by' => !is_null($this->actingUser) ? $this->actingUser->id : null,
+                        'modified_by' => isset($this->actingUser) ? $this->actingUser->id : null,
                         'modified_on' => $dateString,
                     ];
                 }
@@ -509,6 +562,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
 
             }
         }
+        $this->removeDependentCacheItems('phrase');
         if ($weFoundAPreviousMatch) {
             $this->writePhpTranslationArrays();
         }
@@ -558,15 +612,15 @@ ORDER BY `locale`, `text_domain`, `phrase`";
      */
     public function fetchSome($where, $sql = null, $sqlArgs = null, $gateway = null)
     {
-        if (null===$gateway) {
+        if (!isset($gateway)) {
             $gateway = $this->phrasesGateway;
         }
-        if (is_null($where) && is_null($sql)) {
+        if (!isset($where) && !isset($sql)) {
             throw \InvalidArgumentException('No query requested.');
         }
-        if (!is_null($sql))
+        if (isset($sql))
         {
-	        if (is_null($sqlArgs)) {
+	        if (!isset($sqlArgs)) {
 	            $sqlArgs = Adapter::QUERY_MODE_EXECUTE; //make sure query executes
 	        }
             $result = $this->adapter->query($sql, $sqlArgs);

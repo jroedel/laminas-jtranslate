@@ -1,11 +1,7 @@
 <?php
 namespace JTranslate;
 
-use Zend\Mvc\MvcEvent;
 use JTranslate\I18n\Translator\TranslatorEventListener;
-use JTranslate\Controller\Plugin\NowMessenger;
-use Zend\I18n\Translator\Translator;
-use Zend\Router\RouteMatch;
 use Zend\Mvc\Controller\AbstractActionController;
 use JTranslate\Model\TranslationsTable;
 use Zend\ModuleManager\ModuleManager;
@@ -18,18 +14,7 @@ class Module implements BootstrapListenerInterface
     {
         return include __DIR__ . '/../config/module.config.php';
     }
-
-    public function getControllerPluginConfig()
-    {
-        // @todo create a factory and move this to config
-        return array('factories' => array(
-            'nowMessenger' => function ($sm) {
-                $controllerPlugin = new NowMessenger();
-                return $controllerPlugin;
-            },
-        ));
-    }
-
+    
     public function onBootstrap(EventInterface $e)
     {
         /** @var $app \Zend\Mvc\ApplicationInterface */
@@ -57,22 +42,7 @@ class Module implements BootstrapListenerInterface
             $viewRenderer->navigation()->setTranslatorTextDomain('Application'); //@todo make this configurable
         }, 100);
 
-        $em->attach( MvcEvent::EVENT_FINISH,
-            function (MvcEvent $e) {
-                /** @var \JTranslate\Model\TranslationsTable $table **/
-                $table = $e->getApplication()->getServiceManager()->get(TranslationsTable::class);
-
-                /**
-                 *
-                 * @var RouteMatch $match
-                 */
-                $match = $e->getRouteMatch();
-                $result = $table->writeMissingPhrasesToDb($match ? $match->getMatchedRouteName() : null);
-            },
-            -1
-        );
-
-        try { //fail silently if we can't get a translator, or something else goes wrong, then log it.
+//         try { //fail silently if we can't get a translator, or something else goes wrong, then log it.
             /** @var Translator $translator */
             $translator = $sm->get('jtranslate_translator');
             $translator->enableEventManager();
@@ -109,9 +79,9 @@ class Module implements BootstrapListenerInterface
                     $translator->addTranslationFilePattern('phpArray', $directory.'/'.$dir, $pattern, $dir);
                 }
             }
-        } catch (\Exception $exception) {
-//             $service = $sm->get('ApplicationErrorHandling');
-//             $service->logException($exception);
-        }
+//         } catch (\Exception $exception) {
+// //             $service = $sm->get('ApplicationErrorHandling');
+// //             $service->logException($exception);
+//         }
     }
 }
