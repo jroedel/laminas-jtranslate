@@ -134,13 +134,13 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      */
     public function getTranslations($fromAllProjects = false)
     {
-        $cacheKey = 'translations';
-        if ($fromAllProjects) {
-            $cacheKey.='-from-all-projects';
-        }
-        if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
-            return $cache;
-        }
+//         $cacheKey = 'translations';
+//         if ($fromAllProjects) {
+//             $cacheKey.='-from-all-projects';
+//         }
+//         if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
+//             return $cache;
+//         }
         $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`, t.`locale`,t.`translation`,
 t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`, p.`origin_route`
 FROM `trans_phrases` p
@@ -181,7 +181,7 @@ ORDER BY `text_domain`, `phrase`";
                 ];
             }
         }
-        $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
+//         $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
     }
 
