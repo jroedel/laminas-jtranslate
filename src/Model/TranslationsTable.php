@@ -451,22 +451,23 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 if (key_exists($textDomain, $this->userModules)) {
                     $folder = $this->rootDirectory.'/module/'.$textDomain.'/language';
                     if (!file_exists($this->rootDirectory.'/module/'.$textDomain)) {
-                        mkdir($this->rootDirectory.'/module/'.$textDomain, 0755, true);
-                        chmod($this->rootDirectory.'/module/'.$textDomain, 0755);
+                        mkdir($this->rootDirectory.'/module/'.$textDomain, 0775, true);
+                        @chmod($this->rootDirectory.'/module/'.$textDomain, 0775);
                     }
                 } else {
                     $folder = $this->rootDirectory.'/language/'.$textDomain;
                     if (!file_exists($this->rootDirectory.'/language')) {
-                        mkdir($this->rootDirectory.'/language', 0755, true);
-                        chmod($this->rootDirectory.'/language', 0755);
+                        mkdir($this->rootDirectory.'/language', 0775, true);
+                        @chmod($this->rootDirectory.'/language', 0775);
                     }
                 }
                 if (!is_dir($folder)) {
-                    mkdir($folder, 0755, true);
-                    chmod($folder, 0755); /** @see https://stackoverflow.com/questions/3764973/php-mkdir-chmod-and-permissions#3769014 */
+                    mkdir($folder, 0775, true);
+                    @chmod($folder, 0775); /** @see https://stackoverflow.com/questions/3764973/php-mkdir-chmod-and-permissions#3769014 */
                 }
                 $fileToWrite = $folder.'/'.sprintf($this->filePattern, $locale);
                 file_put_contents($fileToWrite, $code);
+                @chmod($fileToWrite, 0775);
             }
         }
     }
