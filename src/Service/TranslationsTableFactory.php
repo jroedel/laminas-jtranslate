@@ -11,7 +11,7 @@ use JUser\Model\UserTable;
 /**
  * Factory responsible of building the {@see TranslationsTable} service
  *
- * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
+ * @author Jeff Ro <jeff.roedel.isp@gmail.com>
  */
 class TranslationsTableFactory implements FactoryInterface
 {

@@ -11,7 +11,7 @@ use Zend\View\Model\ViewModel;
 
 /**
  *
- * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
+ * @author Jeff Ro <jeff.roedel.isp@gmail.com>
  */
 class JTranslateController extends AbstractActionController
 {

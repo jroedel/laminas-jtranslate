@@ -151,6 +151,7 @@ ORDER BY `text_domain`, `phrase`";
 
         $utc = new \DateTimeZone('UTC');
         $userTable = $this->getUserTable();
+        $usernames = $userTable->getUsernames();
         $return = [];
         foreach ($results as $tran) { //@todo avoid setting null locale keys for records without any translations
             //skip rows from other projects if we don't need them
@@ -161,8 +162,9 @@ ORDER BY `text_domain`, `phrase`";
             if (isset($return[$tran['translation_phrase_id']])) {
                 $return[$tran['translation_phrase_id']][$tran['locale']] = $tran['translation'];
                 $return[$tran['translation_phrase_id']][$tran['locale'].'Id'] = $tran['translation_id'];
-                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedBy'] = isset($tran['modified_by']) ?
-                        $userTable->getUser($tran['modified_by']) : null;
+                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedBy'] = 
+                    (isset($tran['modified_by']) && isset($usernames[$tran['modified_by']])) ?
+                    $usernames[$tran['modified_by']] : null;
                 $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedOn'] = isset($tran['modified_on']) ?
                     \DateTime::createFromFormat('Y-m-d H:i:s', $tran['modified_on'], $utc) : null;
             } else {
@@ -170,8 +172,9 @@ ORDER BY `text_domain`, `phrase`";
                     'phraseId' => $tran['translation_phrase_id'],
                     $tran['locale']             => $tran['translation'],
                     $tran['locale'].'Id'        => $tran['translation_id'],
-                    $tran['locale'].'ModifiedBy'=> $tran['modified_by'] ?
-                        $userTable->getUser($tran['modified_by']) : null,
+                    $tran['locale'].'ModifiedBy'=> 
+                        (isset($tran['modified_by']) && isset($usernames[$tran['modified_by']])) ?
+                        $usernames[$tran['modified_by']] : null,
                     $tran['locale'].'ModifiedOn'=> $tran['modified_on'] ?
                         \DateTime::createFromFormat('Y-m-d H:i:s', $tran['modified_on'], $utc) : null,
                     'textDomain'                => $tran['text_domain'],

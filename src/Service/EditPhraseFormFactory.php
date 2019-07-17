@@ -9,7 +9,7 @@ use JTranslate\Form\EditPhraseForm;
 /**
  * Factory responsible of priming the EditPhraseForm
  *
- * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
+ * @author Jeff Ro <jeff.roedel.isp@gmail.com>
  */
 class EditPhraseFormFactory implements FactoryInterface
 {
