@@ -151,36 +151,35 @@ ORDER BY `text_domain`, `phrase`";
 
         $utc = new \DateTimeZone('UTC');
         $userTable = $this->getUserTable();
-        $usernames = $userTable->getUsernames();
+        $users = $userTable->getUsers();
         $return = [];
-        foreach ($results as $tran) { //@todo avoid setting null locale keys for records without any translations
+        foreach ($results as $row) { //@todo avoid setting null locale keys for records without any translations
             //skip rows from other projects if we don't need them
-            if (!$fromAllProjects && $tran['project'] !== $this->config['project_name']) {
+            if (!$fromAllProjects && $row['project'] !== $this->config['project_name']) {
                 continue;
             }
             //if we already already have an entry for this phrase
-            if (isset($return[$tran['translation_phrase_id']])) {
-                $return[$tran['translation_phrase_id']][$tran['locale']] = $tran['translation'];
-                $return[$tran['translation_phrase_id']][$tran['locale'].'Id'] = $tran['translation_id'];
-                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedBy'] = 
-                    (isset($tran['modified_by']) && isset($usernames[$tran['modified_by']])) ?
-                    $usernames[$tran['modified_by']] : null;
-                $return[$tran['translation_phrase_id']][$tran['locale'].'ModifiedOn'] = isset($tran['modified_on']) ?
-                    \DateTime::createFromFormat('Y-m-d H:i:s', $tran['modified_on'], $utc) : null;
+            $userId = (int)$row['modified_by'];
+            $user = (isset($userId) && isset($users[$userId]))
+                ? $users[$userId] : null;
+            if (isset($return[$row['translation_phrase_id']])) {
+                $return[$row['translation_phrase_id']][$row['locale']] = $row['translation'];
+                $return[$row['translation_phrase_id']][$row['locale'].'Id'] = $row['translation_id'];
+                $return[$row['translation_phrase_id']][$row['locale'].'ModifiedBy'] = $user;
+                $return[$row['translation_phrase_id']][$row['locale'].'ModifiedOn'] = isset($row['modified_on']) ?
+                    \DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc) : null;
             } else {
-                $return[$tran['translation_phrase_id']] = [
-                    'phraseId' => $tran['translation_phrase_id'],
-                    $tran['locale']             => $tran['translation'],
-                    $tran['locale'].'Id'        => $tran['translation_id'],
-                    $tran['locale'].'ModifiedBy'=> 
-                        (isset($tran['modified_by']) && isset($usernames[$tran['modified_by']])) ?
-                        $usernames[$tran['modified_by']] : null,
-                    $tran['locale'].'ModifiedOn'=> $tran['modified_on'] ?
-                        \DateTime::createFromFormat('Y-m-d H:i:s', $tran['modified_on'], $utc) : null,
-                    'textDomain'                => $tran['text_domain'],
-                    'phrase'                    => $tran['phrase'],
-                    'originRoute'               => $tran['origin_route'],
-                    'addedOn'                   => $tran['added_on'],
+                $return[$row['translation_phrase_id']] = [
+                    'phraseId' => $row['translation_phrase_id'],
+                    $row['locale']             => $row['translation'],
+                    $row['locale'].'Id'        => $row['translation_id'],
+                    $row['locale'].'ModifiedBy'=> $user,
+                    $row['locale'].'ModifiedOn'=> $row['modified_on'] ?
+                        \DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc) : null,
+                    'textDomain'                => $row['text_domain'],
+                    'phrase'                    => $row['phrase'],
+                    'originRoute'               => $row['origin_route'],
+                    'addedOn'                   => $row['added_on'],
                 ];
             }
         }

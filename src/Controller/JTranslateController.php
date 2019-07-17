@@ -52,11 +52,11 @@ class JTranslateController extends AbstractActionController
         if (empty($finalLocales)) {
             $finalLocales = $locales;
         }
-        return [
+        return new ViewModel([
             'translations'  => $translations,
             'locales'       => $finalLocales,
             'showAll'       => $showAll,
-        ];
+        ]);
     }
 
     public function editAction() {

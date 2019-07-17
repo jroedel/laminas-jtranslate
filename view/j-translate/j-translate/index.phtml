@@ -33,7 +33,7 @@ foreach ($this->translations as $entity) :
         }
     }?>
 <tr>
-    <td><?php if (is_null($entity['originRoute']) || strlen($entity['originRoute']) < 1) {
+    <td><?php if (!isset($entity['originRoute']) || strlen($entity['originRoute']) < 1) {
         echo $this->escapeHtml($entity['textDomain']);
     } else {
         $tooltip = sprintf($this->translate("Originated from the '%s' route"), $this->escapeHtmlAttr($entity['originRoute']));
@@ -49,9 +49,11 @@ foreach ($this->translations as $entity) :
         if (isset($entity[$key.'ModifiedBy']) && $entity[$key.'ModifiedBy'] &&
             isset($entity[$key.'ModifiedOn']) && $entity[$key.'ModifiedOn']
         ) {
+            $username = isset($entity[$key.'ModifiedBy']['username']) 
+                ? $entity[$key.'ModifiedBy']['username'] : '?';
             $tooltip = sprintf($this->translate("submitted on %s by %s"),
                 $this->dateFormat($entity[$key.'ModifiedOn'], IntlDateFormatter::SHORT, IntlDateFormatter::NONE),
-                $this->escapeHtmlAttr($entity[$key.'ModifiedBy']['username']));
+                $this->escapeHtmlAttr($username));
             echo '<span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="'.
                $tooltip.'">'.$this->escapeHtml(Text::truncate($entity[$key],100)).'</span>';
         } else {
