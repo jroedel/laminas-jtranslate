@@ -1,19 +1,8 @@
 <?php
 namespace JTranslate;
-use JTranslate\Controller\JTranslateController;
+
 use Zend\Router\Http\Segment;
 use Zend\Router\Http\Literal;
-use JTranslate\View\Helper\Service\FlagFactory;
-use JTranslate\View\Helper\Service\CountryNameFactory;
-use JTranslate\View\Helper\Service\NowMessengerFactory;
-use JTranslate\Service\CacheFactory;
-use JTranslate\Service\ConfigServiceFactory;
-use JTranslate\Service\TranslationsTableFactory;
-use JTranslate\Model\TranslationsTable;
-use JTranslate\Form\EditPhraseForm;
-use JTranslate\Service\EditPhraseFormFactory;
-use JTranslate\Service\CountriesFactory;
-use JTranslate\Model\CountriesInfo;
 use Zend\Db\Adapter\Adapter;
 use Zend\Mvc\I18n\Translator;
 use Zend\Serializer\Adapter\Json;
@@ -68,7 +57,7 @@ return [
                 'options' => [
                     'route'    => '/admin/translations',
                     'defaults' => [
-                        'controller' => JTranslateController::class,
+                        'controller' => Controller\JTranslateController::class,
                         'action'     => 'index',
                     ],
                 ],
@@ -79,7 +68,7 @@ return [
                         'options' => [
                             'route'    => '/clear-cache',
                             'defaults' => [
-                                'controller' => JTranslateController::class,
+                                'controller' => Controller\JTranslateController::class,
                                 'action'     => 'clearCache',
                             ],
                         ],
@@ -140,18 +129,21 @@ return [
 
     'view_helpers' => [
         'factories' => [
-            'flag'					=> FlagFactory::class,
-            'countryName'			=> CountryNameFactory::class,
-            'nowMessenger'	        => NowMessengerFactory::class,
+            'flag'					=> View\Helper\Service\FlagFactory::class,
+            'countryName'			=> View\Helper\Service\CountryNameFactory::class,
+            'nowMessenger'	        => View\Helper\Service\NowMessengerFactory::class,
+        ],
+        'invokables' => [
+            'languageName'          => View\Helper\LanguageName::class,
         ],
     ],
     'service_manager' => [
         'factories' => [
-            'JTranslate\Cache'          => CacheFactory::class,
-            'JTranslate\Config'         => ConfigServiceFactory::class,
-            TranslationsTable::class    => TranslationsTableFactory::class,
-            EditPhraseForm::class       => EditPhraseFormFactory::class,
-            CountriesInfo::class        => CountriesFactory::class,
+            'JTranslate\Cache'          => Service\CacheFactory::class,
+            'JTranslate\Config'         => Service\ConfigServiceFactory::class,
+            Model\TranslationsTable::class    => Service\TranslationsTableFactory::class,
+            Form\EditPhraseForm::class       => Service\EditPhraseFormFactory::class,
+            Model\CountriesInfo::class        => Service\CountriesFactory::class,
         ],
         'aliases' => [
             'jtranslate_db_adapter' => Adapter::class,
