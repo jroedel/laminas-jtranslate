@@ -11,7 +11,7 @@ use JUser\Model\UserTable;
 /**
  * Factory responsible of building the {@see TranslationsTable} service
  *
- * @author Jeff Ro <jeff.roedel.isp@gmail.com>
+ * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
 class TranslationsTableFactory implements FactoryInterface
 {
@@ -22,7 +22,7 @@ class TranslationsTableFactory implements FactoryInterface
      */
     public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
     {
-        /** @var Adapter $adapter */ 
+        /** @var Adapter $adapter */
         $adapter = $container->get(Adapter::class);
         $cache = $container->get('JTranslate\Cache');
         $em = $container->get('Application')->getEventManager();
@@ -33,7 +33,7 @@ class TranslationsTableFactory implements FactoryInterface
         $phrasesGateway = new TableGateway($phrasesTableName , $adapter);
         $rootDirectory = isset($config['root_directory']) ? $config['root_directory'] : getcwd();
 
-        /** @var  User $userService **/
+        /** @var $userService \ZfcUser\Service\User */
         $userService = $container->get('zfcuser_user_service');
         $user = $userService->getAuthService()->getIdentity();
         $userTable = $container->get(UserTable::class);

@@ -20,7 +20,7 @@ use Zend\Mvc\MvcEvent;
 class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
 {
     use SionCacheTrait;
-    
+
     /**
      *
      * @var array $phrasesInDb
@@ -104,13 +104,13 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
         $this->actingUser           = $actingUser;
         $this->userTable            = $userTable;
         $this->newMissingPhrases    = [];
-        
+
         if (isset($cache)) {
             $this->setPersistentCache($cache);
             $this->wireOnFinishTrigger($eventManager);
         }
         $eventManager->attach(MvcEvent::EVENT_FINISH, [$this, 'finishUp'], -1);
-        
+
         $this->phrasesInDb          = $this->getPhraseKeysFromDb();
         $this->setRootDirectory($rootDirectory);
     }
@@ -251,7 +251,7 @@ HAVING PhraseLocaleCount < ?";
         $this->removeDependentCacheItems('phrase');
         return $results;
     }
-    
+
     /**
      * Check if an entity exists
      * @param string $entity
@@ -272,8 +272,8 @@ HAVING PhraseLocaleCount < ?";
         }
         return true;
     }
-    
-    
+
+
     public function deletePhrase($id, $refreshCache = true)
     {
         //make sure entity exists before attempting to delete
@@ -282,18 +282,18 @@ HAVING PhraseLocaleCount < ?";
         }
         $gateway = $this->translationsGateway;
         $return = $gateway->delete(['translation_phrase_id' => $id]);
-        
+
         $gateway = $this->phrasesGateway;
         $return = $gateway->delete(['translation_phrase_id' => $id]);
-        
+
         if ($return !== 1) {
             throw new \Exception('Delete action expected a return code of \'1\', received \''.$return.'\'');
         }
-        
+
         if ($refreshCache) {
             $this->removeDependentCacheItems('phrase');
         }
-        
+
         return $return;
     }
 
@@ -426,7 +426,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
     }
-    
+
     public function finishUp(MvcEvent $e)
     {
         $match = $e->getRouteMatch();
@@ -638,7 +638,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         return $return;
     }
 
-    public function getLocaleNames()
+    public static function getLocaleNames()
     {
         return [
 'af_NA' => 'Afrikaans (Namibia)',
@@ -1075,6 +1075,6 @@ ORDER BY `locale`, `text_domain`, `phrase`";
 'yo' => 'Yoruba',
 'zu_ZA' => 'Zulu (South Africa)',
 'zu' => 'Zulu'
-          ];
+      ];
     }
 }

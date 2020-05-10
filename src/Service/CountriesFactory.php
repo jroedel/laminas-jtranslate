@@ -9,7 +9,7 @@ use JTranslate\Model\CountriesInfo;
 /**
  * Factory responsible of priming the CountriesInfo service
  *
- * @author Jeff Ro <jeff.roedel.isp@gmail.com>
+ * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
 class CountriesFactory implements FactoryInterface
 {

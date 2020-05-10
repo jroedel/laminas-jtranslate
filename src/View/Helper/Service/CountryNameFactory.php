@@ -9,7 +9,7 @@ use JTranslate\View\Helper\CountryName;
 /**
  * Factory responsible of priming the CountryName view helper
  *
- * @author Jeff Ro <jeff.roedel.isp@gmail.com>
+ * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
 class CountryNameFactory implements FactoryInterface
 {

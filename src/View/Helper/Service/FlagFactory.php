@@ -9,7 +9,7 @@ use JTranslate\View\Helper\Flag;
 /**
  * Factory responsible of priming the Flag view helper
  *
- * @author Jeff Ro <jeff.roedel.isp@gmail.com>
+ * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
 class FlagFactory implements FactoryInterface
 {

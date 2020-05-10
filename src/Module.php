@@ -14,7 +14,7 @@ class Module implements BootstrapListenerInterface
     {
         return include __DIR__ . '/../config/module.config.php';
     }
-    
+
     public function onBootstrap(EventInterface $e)
     {
         /** @var $app \Zend\Mvc\ApplicationInterface */
@@ -43,7 +43,7 @@ class Module implements BootstrapListenerInterface
         }, 100);
 
 //         try { //fail silently if we can't get a translator, or something else goes wrong, then log it.
-            /** @var Translator $translator */
+            /** @var \Zend\Mvc\I18n\Translator $translator */
             $translator = $sm->get('jtranslate_translator');
             $translator->enableEventManager();
             $translator->setLocale(\Locale::getDefault());
