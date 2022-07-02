@@ -110,7 +110,7 @@ class CountriesInfo
         return $return;
     }
 
-    public function getTranslatedCountryNames($language, $commonOrOfficial = 'common')
+    public function getTranslatedCountryNames(string $language, string $commonOrOfficial = 'common'): array
     {
         $langMap = array(
             'en' => 'eng',

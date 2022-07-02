@@ -2,7 +2,7 @@
 
 namespace JTranslate\Controller\Plugin;
 
-use Zend\Mvc\Controller\Plugin\AbstractPlugin;
+use Laminas\Mvc\Controller\Plugin\AbstractPlugin;
 
 class NowMessenger extends AbstractPlugin
 {
@@ -91,7 +91,7 @@ class NowMessenger extends AbstractPlugin
      * Return the messages pending render
      * @return array
      */
-    public function getMessages($namespace = self::NAMESPACE_DEFAULT) {
+    public function getMessages(string $namespace = self::NAMESPACE_DEFAULT) {
         $return = array();
         foreach ($this->messages as $message) {
             if ($message['namespace'] == $namespace) {

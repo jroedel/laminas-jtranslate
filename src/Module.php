@@ -2,11 +2,11 @@
 namespace JTranslate;
 
 use JTranslate\I18n\Translator\TranslatorEventListener;
-use Zend\Mvc\Controller\AbstractActionController;
+use Laminas\Mvc\Controller\AbstractActionController;
 use JTranslate\Model\TranslationsTable;
-use Zend\ModuleManager\ModuleManager;
-use Zend\EventManager\EventInterface;
-use Zend\ModuleManager\Feature\BootstrapListenerInterface;
+use Laminas\ModuleManager\ModuleManager;
+use Laminas\EventManager\EventInterface;
+use Laminas\ModuleManager\Feature\BootstrapListenerInterface;
 
 class Module implements BootstrapListenerInterface
 {
@@ -17,7 +17,7 @@ class Module implements BootstrapListenerInterface
 
     public function onBootstrap(EventInterface $e)
     {
-        /** @var $app \Zend\Mvc\ApplicationInterface */
+        /** @var $app \Laminas\Mvc\ApplicationInterface */
         $app = $e->getTarget();
         $sm = $app->getServiceManager();
         $em = $app->getEventManager();
@@ -43,7 +43,7 @@ class Module implements BootstrapListenerInterface
         }, 100);
 
 //         try { //fail silently if we can't get a translator, or something else goes wrong, then log it.
-            /** @var \Zend\Mvc\I18n\Translator $translator */
+            /** @var \Laminas\Mvc\I18n\Translator $translator */
             $translator = $sm->get('jtranslate_translator');
             $translator->enableEventManager();
             $translator->setLocale(\Locale::getDefault());
@@ -60,7 +60,7 @@ class Module implements BootstrapListenerInterface
             $modules        = [];
             foreach(glob('module/*', GLOB_ONLYDIR) as $dir) {
                 $dir = str_replace('module/', '', $dir);
-                if (key_exists($dir, $loadedModules)) {
+                if (array_key_exists($dir, $loadedModules)) {
                     $modules[$dir] = getcwd().'/module/'.$dir.'/language';
                 }
             }

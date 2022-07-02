@@ -2,7 +2,7 @@
 
 namespace JTranslate\View\Helper;
 
-use Zend\View\Helper\AbstractHelper;
+use Laminas\View\Helper\AbstractHelper;
 use JTranslate\Model\CountriesInfo;
 
 class CountryName extends AbstractHelper
@@ -21,7 +21,7 @@ class CountryName extends AbstractHelper
     public function __invoke($countryCode, $addFlag = false, $commonOrOfficial = 'common')
     {
         $countryCode = strtoupper($countryCode);
-        if (! key_exists($countryCode, $this->getCommonNames())) {
+        if (! array_key_exists($countryCode, $this->getCommonNames())) {
             return '';
         }
         $return = '';

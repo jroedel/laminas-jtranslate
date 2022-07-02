@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'Delete translation-phrase' => 'Eliminar translation-phrase',
     'Edit Translation' => 'Editar Traducción',
     'English (United States)' => 'Inglés (Estados Unidos)',
     'Error in form submission, please review.' => 'Error en el formulario, por favor revisar.',

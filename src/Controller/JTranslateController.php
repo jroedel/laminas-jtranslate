@@ -2,13 +2,13 @@
 
 namespace JTranslate\Controller;
 
-use Zend\Mvc\Controller\AbstractActionController;
-use Zend\Mvc\Plugin\FlashMessenger\FlashMessenger;
+use Laminas\Mvc\Controller\AbstractActionController;
+use Laminas\Mvc\Plugin\FlashMessenger\FlashMessenger;
 use JTranslate\Model\TranslationsTable;
 use JTranslate\Controller\Plugin\NowMessenger;
 use JTranslate\Form\EditPhraseForm;
 use JTranslate\Form\DeletePhraseForm;
-use Zend\View\Model\ViewModel;
+use Laminas\View\Model\ViewModel;
 
 /**
  *
@@ -58,7 +58,12 @@ class JTranslateController extends AbstractActionController
         ]);
     }
 
-    public function editAction()
+    /**
+     * @return (EditPhraseForm|int|mixed|string[])[]|ViewModel|\Laminas\Http\Response
+     *
+     * @psalm-return ViewModel|\Laminas\Http\Response|array{phrase: mixed, phraseId: int, locales: array<string>, form: EditPhraseForm}
+     */
+    public function editAction(): array|ViewModel|\Laminas\Http\Response
     {
         /** @var TranslationsTable $table **/
         $table = $this->translationsTable;
@@ -120,7 +125,7 @@ class JTranslateController extends AbstractActionController
     /**
      * If the form has been posted, confirm the CSRF. If all is well, delete the entity.
      * If the request is a GET, ask the user to confirm the deletion
-     * @return \Zend\View\Model\ViewModel|\Zend\Stdlib\ResponseInterface
+     * @return \Laminas\View\Model\ViewModel|\Laminas\Stdlib\ResponseInterface
      */
     public function deleteAction()
     {

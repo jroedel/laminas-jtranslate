@@ -1,39 +1,26 @@
 <?php
+
+declare(strict_types=1);
+
 namespace JTranslate\View\Helper;
 
-use Zend\View\Helper\AbstractHelper;
+use Laminas\View\Helper\AbstractHelper;
+use Locale;
 use SionModel\I18n\LanguageSupport;
 
 class LanguageName extends AbstractHelper
 {
-    protected $languageSupport;
-    protected $defaultLanguage;
-    
     public function __invoke($language, $inLanguage = null)
     {
-        if (!isset($inLanguage)) {
-            $inLanguage = $this->getDefaultLanguage();
+        if (! isset($inLanguage)) {
+            $inLanguage = self::getDefaultLanguage();
         }
-        $name = $this->getLanguageSupport()->getLanguageName($language, $inLanguage);
-        if (!isset($name)) {
-            return '';
-        }
-        return $name;
+        $name = LanguageSupport::getLanguageName($language, $inLanguage);
+        return $name ?? '';
     }
-    
-    public function getLanguageSupport()
+
+    protected static function getDefaultLanguage(): ?string
     {
-        if (!isset($this->languageSupport)) {
-            $this->languageSupport = new LanguageSupport();
-        }
-        return $this->languageSupport;
-    }
-    
-    protected function getDefaultLanguage()
-    {
-        if (!isset($this->defaultLanguage)) {
-            $this->defaultLanguage = \Locale::getPrimaryLanguage(\Locale::getDefault());
-        }
-        return $this->defaultLanguage;
+        return Locale::getPrimaryLanguage(Locale::getDefault());
     }
 }

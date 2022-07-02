@@ -37,8 +37,8 @@ foreach ($this->translations as $entity) :
         echo $this->escapeHtml($entity['textDomain']);
     } else {
         $tooltip = sprintf($this->translate("Originated from the '%s' route"), $this->escapeHtmlAttr($entity['originRoute']));
-        echo '<span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="'.
-           $tooltip.'">'.$this->escapeHtml($entity['textDomain']).'</span>';
+        echo '<span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="',
+           $tooltip, '">',$this->escapeHtml($entity['textDomain']),'</span>';
     };?></td>
     <td><a href="<?php echo $this->url('jtranslate/phrase/edit', ['phrase_id' => $entity['phraseId']]); ?>">
 <span class="glyphicon glyphicon-pencil"></span></a><a href="<?php echo $this->url('jtranslate/phrase/delete', ['phrase_id' => $entity['phraseId']]); ?>">
@@ -55,7 +55,7 @@ foreach ($this->translations as $entity) :
                 $this->dateFormat($entity[$key.'ModifiedOn'], IntlDateFormatter::SHORT, IntlDateFormatter::NONE),
                 $this->escapeHtmlAttr($username));
             echo '<span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="'.
-               $tooltip.'">'.$this->escapeHtml(Text::truncate($entity[$key],100)).'</span>';
+               $tooltip,'">',$this->escapeHtml(Text::truncate($entity[$key],100)),'</span>';
         } else {
             echo $this->escapeHtml(Text::truncate($entity[$key],100));
         }

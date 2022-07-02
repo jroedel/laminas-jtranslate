@@ -1,7 +1,7 @@
 <?php
 namespace JTranslate\Service;
 
-use Zend\ServiceManager\Factory\FactoryInterface;
+use Laminas\ServiceManager\Factory\FactoryInterface;
 use Interop\Container\ContainerInterface;
 use JTranslate\Model\TranslationsTable;
 use JTranslate\Form\EditPhraseForm;
@@ -18,7 +18,7 @@ class EditPhraseFormFactory implements FactoryInterface
      *
      * @inheritdoc
      */
-    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
+    public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
         /** @var TranslationsTable $table **/
 		$table = $container->get ( TranslationsTable::class);

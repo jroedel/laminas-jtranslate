@@ -1,8 +1,8 @@
 <?php
 namespace JTranslate\Form;
 
-use Zend\Form\Form;
-use Zend\InputFilter\InputFilterProviderInterface;
+use Laminas\Form\Form;
+use Laminas\InputFilter\InputFilterProviderInterface;
 
 class EditPhraseForm extends Form implements InputFilterProviderInterface
 {
@@ -94,7 +94,7 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
 		));
 	}
 	
-	public function getLocales()
+	public function getLocales(): array
 	{
 	    return $this->locales;
 	}
@@ -113,7 +113,7 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
 	/**
 	 * @todo Add validators for each of the pairs of elements of the different locales
 	 * (non-PHPdoc)
-	 * @see \Zend\InputFilter\InputFilterProviderInterface::getInputFilterSpecification()
+	 * @see \Laminas\InputFilter\InputFilterProviderInterface::getInputFilterSpecification()
 	 */
 	public function getInputFilterSpecification()
 	{
@@ -124,13 +124,13 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
     			'phraseId' => array(
     	            'validators' => array(
     	                array(
-    	                    'name'    => 'Zend\Validator\Db\RecordExists',
+    	                    'name'    => 'Laminas\Validator\Db\RecordExists',
     	                    'options' => array(
     	                        'table' => $this->phrasesTableName,
     	                        'field' => 'translation_phrase_id',
-    	                        'adapter' => \Zend\Db\TableGateway\Feature\GlobalAdapterFeature::getStaticAdapter(),
+    	                        'adapter' => \Laminas\Db\TableGateway\Feature\GlobalAdapterFeature::getStaticAdapter(),
     	                        'messages' => array(
-    	                            \Zend\Validator\Db\RecordExists::ERROR_NO_RECORD_FOUND => 'Phrase not found in database' 
+    	                            \Laminas\Validator\Db\RecordExists::ERROR_NO_RECORD_FOUND => 'Phrase not found in database' 
     	                        ),
     	                    ),
     	                ),
@@ -143,13 +143,13 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
 // 	protected function getLocaleValidatorConfiguration()
 // 	{
 // 	    return array(
-//             'name'    => 'Zend\Validator\Db\RecordExists',
+//             'name'    => 'Laminas\Validator\Db\RecordExists',
 //             'options' => array(
 //                 'table' => $this->phrasesTranslationName,
 //                 'field' => 'phrase',
-//                 'adapter' => \Zend\Db\TableGateway\Feature\GlobalAdapterFeature::getStaticAdapter(),
+//                 'adapter' => \Laminas\Db\TableGateway\Feature\GlobalAdapterFeature::getStaticAdapter(),
 //                 'messages' => array(
-//                     \Zend\Validator\Db\RecordExists::ERROR_NO_RECORD_FOUND => 'Phrase not found in database' 
+//                     \Laminas\Validator\Db\RecordExists::ERROR_NO_RECORD_FOUND => 'Phrase not found in database' 
 //                 ),
 //             ),
 //         );

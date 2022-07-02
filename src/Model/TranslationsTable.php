@@ -1,21 +1,21 @@
 <?php
 namespace JTranslate\Model;
 
-use Zend\Db\Adapter\AdapterAwareInterface;
-use Zend\Db\TableGateway\AbstractTableGateway;
-use Zend\Db\Adapter\Adapter;
-use Zend\Db\TableGateway\TableGatewayInterface;
-use Zend\Cache\Storage\StorageInterface;
-use Zend\Db\Adapter\AdapterInterface;
-use Zend\Db\Sql\Sql;
-use Zend\Db\Sql\Where;
-use ZfcUser\Entity\UserInterface;
+use Laminas\Db\Adapter\AdapterAwareInterface;
+use Laminas\Db\TableGateway\AbstractTableGateway;
+use Laminas\Db\Adapter\Adapter;
+use Laminas\Db\TableGateway\TableGatewayInterface;
+use Laminas\Cache\Storage\StorageInterface;
+use Laminas\Db\Adapter\AdapterInterface;
+use Laminas\Db\Sql\Sql;
+use Laminas\Db\Sql\Where;
+use LmcUser\Entity\UserInterface;
 use JUser\Model\UserTable;
-use Zend\Code\Generator\ValueGenerator;
-use Zend\Code\Generator\FileGenerator;
-use Zend\Db\ResultSet\ResultSet;
+use Laminas\Code\Generator\ValueGenerator;
+use Laminas\Code\Generator\FileGenerator;
+use Laminas\Db\ResultSet\ResultSet;
 use SionModel\Db\Model\SionCacheTrait;
-use Zend\Mvc\MvcEvent;
+use Laminas\Mvc\MvcEvent;
 
 class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
 {
@@ -132,7 +132,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      *
      * @return array
      */
-    public function getTranslations($fromAllProjects = false)
+    public function getTranslations(bool $fromAllProjects = false)
     {
 //         $cacheKey = 'translations';
 //         if ($fromAllProjects) {
@@ -145,6 +145,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`, p.`origin_route`
 FROM `trans_phrases` p
 LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
+WHERE (p.`project` = ?)
 ORDER BY `text_domain`, `phrase`";
         $sqlParams = [$this->config['project_name']];
         $results = $this->fetchSome(null, $sql, $sqlParams);
@@ -187,7 +188,7 @@ ORDER BY `text_domain`, `phrase`";
         return $return;
     }
 
-    public function getOutstandingTranslationCount()
+    public function getOutstandingTranslationCount(): int
     {
         $sql = "SELECT p.`translation_phrase_id`, COUNT(*) AS PhraseLocaleCount
 FROM `trans_phrases` p
@@ -204,12 +205,17 @@ HAVING PhraseLocaleCount < ?";
         }
     }
 
-    public function getPhrase($id)
+    public function getPhrase(int $id)
     {
         return $this->getTranslations()[$id];
     }
 
-    public function updatePhrase($id, $data)
+    /**
+     * @return \Laminas\Db\Adapter\Driver\ResultInterface[]
+     *
+     * @psalm-return list<\Laminas\Db\Adapter\Driver\ResultInterface>
+     */
+    public function updatePhrase(int $id, iterable $data): array
     {
         $phrase = $this->getTranslations()[$id];
         $dateString = date_format((new \DateTime(null, new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
@@ -274,7 +280,7 @@ HAVING PhraseLocaleCount < ?";
     }
 
 
-    public function deletePhrase($id, $refreshCache = true)
+    public function deletePhrase($id, $refreshCache = true): int
     {
         //make sure entity exists before attempting to delete
         if (!$this->existsPhrase($id)) {
@@ -301,7 +307,7 @@ HAVING PhraseLocaleCount < ?";
      *
      * @return string[]
      */
-    public function getLocales($shouldIncludeKeyLocale = false)
+    public function getLocales(bool $shouldIncludeKeyLocale = false)
     {
         $return = [];
         $localeNames = $this->getLocaleNames();
@@ -311,7 +317,7 @@ HAVING PhraseLocaleCount < ?";
             array_push($locales, $this->config['key_locale']);
         }
         foreach ($locales as $locale) {
-            if (key_exists($locale, $localeNames)) {
+            if (array_key_exists($locale, $localeNames)) {
                 $return[$locale] = $localeNames[$locale];
             }
         }
@@ -342,7 +348,7 @@ HAVING PhraseLocaleCount < ?";
         $results = $this->fetchSome($where);
         $return = [];
         foreach ($results as $tran) {
-            if (key_exists($tran['text_domain'], $return)) {
+            if (array_key_exists($tran['text_domain'], $return)) {
                 array_push($return[$tran['text_domain']], $tran['phrase']);
             } else {
                 $return[$tran['text_domain']] = [
@@ -355,10 +361,11 @@ HAVING PhraseLocaleCount < ?";
     }
 
     /**
-     * Add to the list of translations to add to the database
+     *  Add to the list of translations to add to the database
+     *
      * @param array $params
      */
-    protected function addMissingPhrase($params)
+    protected function addMissingPhrase($params): static
     {
         if (!isset($this->phrasesInDb[$params['text_domain']])) {
             $this->phrasesInDb[$params['text_domain']] = [$params['message']];
@@ -374,10 +381,9 @@ HAVING PhraseLocaleCount < ?";
     }
 
     /**
-     *
      * @param array $params
      */
-    public function reportMissingTranslation($params)
+    public function reportMissingTranslation($params): static
     {
         if (!isset($this->phrasesInDb[$params['text_domain']]) ||
             !in_array($params['message'], $this->phrasesInDb[$params['text_domain']])) {
@@ -427,17 +433,16 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         return $return;
     }
 
-    public function finishUp(MvcEvent $e)
+    public function finishUp(MvcEvent $e): void
     {
         $match = $e->getRouteMatch();
         $this->writeMissingPhrasesToDb($match ? $match->getMatchedRouteName() : null);
     }
 
     /**
-     * Queries the database for the latest translations and rewrites all the files.
-     *
+     *  Queries the database for the latest translations and rewrites all the files.
      */
-    public function writePhpTranslationArrays()
+    public function writePhpTranslationArrays(): void
     {
         $translations = $this->getTranslatedText();
         foreach ($translations as $textDomain => $localeTrans) {
@@ -450,7 +455,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 $code = $file->generate();
 
                 //if the current text domain is a module, then save it there. If not, to the root.
-                if (key_exists($textDomain, $this->userModules)) {
+                if (array_key_exists($textDomain, $this->userModules)) {
                     $folder = $this->rootDirectory.'/module/'.$textDomain.'/language';
                     if (!file_exists($this->rootDirectory.'/module/'.$textDomain)) {
                         mkdir($this->rootDirectory.'/module/'.$textDomain, 0775, true);
@@ -477,7 +482,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     /**
      * Check the TranslationTable object for new missing translations and write them to the database to be translated
      * @param string $routeName
-     * @return \Zend\Db\Adapter\Driver\ResultInterface[]
+     * @return \Laminas\Db\Adapter\Driver\ResultInterface[]
      */
     public function writeMissingPhrasesToDb($routeName = null)
     {
@@ -572,13 +577,13 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         return $result;
     }
 
-    public function setUserModules($userModules)
+    public function setUserModules($userModules): static
     {
         $this->userModules = $userModules;
         return $this;
     }
 
-    public function getUserTable()
+    public function getUserTable(): UserTable
     {
         if (!$this->userTable) {
             throw \Exception('User table not loaded into TranslationsTable');
@@ -611,9 +616,32 @@ ORDER BY `locale`, `text_domain`, `phrase`";
      * @param Where|\Closure|string|array $where
      * @param string
      * @param array
+     * @param null|string $sql
+     * @param (int|mixed)[]|null $sqlArgs
+     *
      * @return array
+     *
+     * @psalm-param 'SELECT p.`translation_phrase_id`, COUNT(*) AS PhraseLocaleCount
+FROM `trans_phrases` p
+LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
+WHERE (`project` = ?)
+GROUP BY translation_phrase_id
+HAVING PhraseLocaleCount < ?'|'SELECT t.`translation_id`,p.`translation_phrase_id`,
+t.`locale`, t.`translation`, p.`text_domain`,  p.`phrase`
+FROM `trans_phrases` p
+INNER JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
+WHERE (p.`project` = ?)
+ORDER BY `locale`, `text_domain`, `phrase`'|'SELECT t.`translation_id`,p.`translation_phrase_id`, t.`locale`,t.`translation`,
+t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`, p.`origin_route`
+FROM `trans_phrases` p
+LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
+WHERE (p.`project` = ?)
+ORDER BY `text_domain`, `phrase`'|null $sql
+     * @psalm-param array{0: mixed, 1?: int}|null $sqlArgs
+     *
+     * @psalm-return list<mixed>
      */
-    public function fetchSome($where, $sql = null, $sqlArgs = null, $gateway = null)
+    public function fetchSome(Sql|null $where, string|null $sql = null, array|null $sqlArgs = null, $gateway = null): array
     {
         if (!isset($gateway)) {
             $gateway = $this->phrasesGateway;
@@ -638,7 +666,12 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         return $return;
     }
 
-    public static function getLocaleNames()
+    /**
+     * @return string[]
+     *
+     * @psalm-return array<string, string>
+     */
+    public static function getLocaleNames(): array
     {
         return [
 'af_NA' => 'Afrikaans (Namibia)',

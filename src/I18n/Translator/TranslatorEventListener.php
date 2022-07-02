@@ -1,9 +1,9 @@
 <?php
 namespace JTranslate\I18n\Translator;
-use Zend\EventManager\AbstractListenerAggregate;
-use Zend\EventManager\Event;
-use Zend\EventManager\EventManagerInterface;
-use Zend\I18n\Translator\Translator;
+use Laminas\EventManager\AbstractListenerAggregate;
+use Laminas\EventManager\Event;
+use Laminas\EventManager\EventManagerInterface;
+use Laminas\I18n\Translator\Translator;
 use JTranslate\Model\TranslationsTable;
 class TranslatorEventListener extends AbstractListenerAggregate
 {
@@ -32,12 +32,15 @@ class TranslatorEventListener extends AbstractListenerAggregate
     
     /**
      * @todo Rethink my filter of locales
+     *
      * @param Event $e
+     *
+     * @return void
      */
     public function missingTranslation(Event $e)
     {
         $params = $e->getParams();
-        if (!key_exists($params['locale'], $this->locales)) {
+        if (!array_key_exists($params['locale'], $this->locales)) {
             return;
         }
         $this->table->reportMissingTranslation($params);

@@ -3,7 +3,7 @@
 
 namespace JTranslate\View\Helper;
 
-use Zend\View\Helper\AbstractHelper;
+use Laminas\View\Helper\AbstractHelper;
 use JTranslate\Model\CountriesInfo;
 
 class Flag extends AbstractHelper
@@ -24,7 +24,7 @@ class Flag extends AbstractHelper
     public function __invoke($countryCode)
     {
         $countryCode = strtoupper($countryCode);
-        if (!key_exists($countryCode, $this->countryNames)) {
+        if (!array_key_exists($countryCode, $this->countryNames)) {
             return '';
         }
         

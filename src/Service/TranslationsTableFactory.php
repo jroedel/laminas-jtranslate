@@ -1,11 +1,11 @@
 <?php
 namespace JTranslate\Service;
 
-use Zend\ServiceManager\Factory\FactoryInterface;
+use Laminas\ServiceManager\Factory\FactoryInterface;
 use Interop\Container\ContainerInterface;
-use Zend\Db\Adapter\Adapter;
+use Laminas\Db\Adapter\Adapter;
 use JTranslate\Model\TranslationsTable;
-use Zend\Db\TableGateway\TableGateway;
+use Laminas\Db\TableGateway\TableGateway;
 use JUser\Model\UserTable;
 
 /**
@@ -20,7 +20,7 @@ class TranslationsTableFactory implements FactoryInterface
      *
      * @inheritdoc
      */
-    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
+    public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
         /** @var Adapter $adapter */
         $adapter = $container->get(Adapter::class);
@@ -33,8 +33,8 @@ class TranslationsTableFactory implements FactoryInterface
         $phrasesGateway = new TableGateway($phrasesTableName , $adapter);
         $rootDirectory = isset($config['root_directory']) ? $config['root_directory'] : getcwd();
 
-        /** @var $userService \ZfcUser\Service\User */
-        $userService = $container->get('zfcuser_user_service');
+        /** @var $userService \LmcUser\Service\User */
+        $userService = $container->get('lmcuser_user_service');
         $user = $userService->getAuthService()->getIdentity();
         $userTable = $container->get(UserTable::class);
         $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable, $rootDirectory, $em);

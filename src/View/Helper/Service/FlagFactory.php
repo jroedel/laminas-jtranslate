@@ -1,7 +1,7 @@
 <?php
 namespace JTranslate\View\Helper\Service;
 
-use Zend\ServiceManager\Factory\FactoryInterface;
+use Laminas\ServiceManager\Factory\FactoryInterface;
 use Interop\Container\ContainerInterface;
 use JTranslate\Model\CountriesInfo;
 use JTranslate\View\Helper\Flag;
@@ -18,7 +18,7 @@ class FlagFactory implements FactoryInterface
      *
      * @inheritdoc
      */
-    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
+    public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
         $parentLocator = $container->getServiceLocator();
         /** @var CountriesInfo $countries */
