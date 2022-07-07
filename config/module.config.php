@@ -34,7 +34,14 @@ return [
         ],
     ],
     'translator'         => [
-        'translation_file_patterns' => [['type' => 'phpArray', 'base_dir' => __DIR__ . '/../language', 'pattern' => '%s.lang.php', 'text_domain' => __NAMESPACE__]],
+        'translation_file_patterns' => [
+            [
+                'type'        => 'phpArray',
+                'base_dir'    => __DIR__ . '/../language',
+                'pattern'     => '%s.lang.php',
+                'text_domain' => __NAMESPACE__,
+            ],
+        ],
     ],
     'router'             => [
         'routes' => [
@@ -45,26 +52,72 @@ return [
                     'defaults' => ['controller' => Controller\JTranslateController::class, 'action' => 'index'],
                 ],
                 'may_terminate' => true,
-                'child_routes'  => ['clear-cache' => ['type' => Literal::class, 'options' => ['route' => '/clear-cache', 'defaults' => ['controller' => Controller\JTranslateController::class, 'action' => 'clearCache']]], 'phrase' => ['type' => Segment::class, 'options' => ['route' => '/:phrase_id', 'constraints' => ['phrase_id' => '[0-9]{1,5}']], 'may_terminate' => false, 'child_routes' => ['edit' => ['type' => Literal::class, 'options' => ['route' => '/edit', 'defaults' => ['action' => 'edit']]], 'delete' => ['type' => Literal::class, 'options' => ['route' => '/delete', 'defaults' => ['action' => 'delete']]]]]],
+                'child_routes'  => [
+                    'clear-cache' => [
+                        'type'    => Literal::class,
+                        'options' => [
+                            'route'    => '/clear-cache',
+                            'defaults' => [
+                                'controller' => Controller\JTranslateController::class,
+                                'action'     => 'clearCache',
+                            ],
+                        ],
+                    ],
+                    'phrase'      => [
+                        'type'          => Segment::class,
+                        'options'       => [
+                            'route'       => '/:phrase_id',
+                            'constraints' => [
+                                'phrase_id' => '[0-9]{1,5}',
+                            ],
+                        ],
+                        'may_terminate' => false,
+                        'child_routes'  => [
+                            'edit'   => [
+                                'type'    => Literal::class,
+                                'options' => [
+                                    'route'    => '/edit',
+                                    'defaults' => [
+                                        'action' => 'edit',
+                                    ],
+                                ],
+                            ],
+                            'delete' => [
+                                'type'    => Literal::class,
+                                'options' => [
+                                    'route'    => '/delete',
+                                    'defaults' => [
+                                        'action' => 'delete',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
             ],
         ],
     ],
     'controllers'        => ['invokables' => [], 'abstract_factories' => [LazyControllerFactory::class]],
     'controller_plugins' => ['invokables' => ['nowMessenger' => Controller\Plugin\NowMessenger::class]],
-    'view_manager'       => ['template_map' => include __DIR__ . '/template_map.config.php', 'template_path_stack' => ['jtranslate' => __DIR__ . '/../view']],
+    'view_manager'       => [
+        'template_map'        => include __DIR__ . '/template_map.config.php',
+        'template_path_stack' => [
+            'jtranslate' => __DIR__ . '/../view',
+        ],
+    ],
     'view_helpers'       => [
         'factories'  => [
-            'flag' => View\Helper\Service\FlagFactory::class,
-            'countryName' => View\Helper\Service\CountryNameFactory::class,
-            'nowMessenger' => View\Helper\Service\NowMessengerFactory::class
+            'flag'         => View\Helper\Service\FlagFactory::class,
+            'countryName'  => View\Helper\Service\CountryNameFactory::class,
+            'nowMessenger' => View\Helper\Service\NowMessengerFactory::class,
         ],
         'invokables' => [
-            'languageName' => View\Helper\LanguageName::class, // cache options have to be compatible with Laminas\Cache\StorageFactory::factory
+            // cache options have to be compatible with Laminas\Cache\StorageFactory::factory
+            'languageName' => View\Helper\LanguageName::class,
  // With a namespace we can indicate the same type of items
- // -> So we can simple use the db id as cache key
+ // -> So we can simply use the db id as cache key
  //1 day
  //JTranslateController::class => JTranslateController::class,
-
         ],
     ],
     'service_manager'    => [
