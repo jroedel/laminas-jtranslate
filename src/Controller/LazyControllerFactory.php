@@ -1,76 +1,83 @@
 <?php
+
+declare(strict_types=1);
+
 namespace JTranslate\Controller;
 
-use Interop\Container\ContainerInterface;
+use Exception;
+use Laminas\Form\FormElementManager;
+use Laminas\Mvc\I18n\Translator;
 use Laminas\ServiceManager\Factory\AbstractFactoryInterface;
+use Laminas\Validator\ValidatorPluginManager;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\ContainerInterface;
+use Psr\Container\NotFoundExceptionInterface;
+use ReflectionClass;
+use ReflectionException;
+
+use function array_key_exists;
+use function explode;
+use function str_contains;
 
 class LazyControllerFactory implements AbstractFactoryInterface
 {
     public function canCreate(ContainerInterface $container, $requestedName)
     {
-        list( $module, ) = explode( '\\', __NAMESPACE__, 2 );
-        return strstr( $requestedName, $module . '\Controller') !== false;
+        [$module] = explode('\\', __NAMESPACE__, 2);
+        return str_contains($requestedName, $module . '\Controller');
     }
-    
+
     /**
      * These aliases work to substitute class names with SM types that are buried in ZF
+     *
      * @var array
      */
     protected $aliases = [
-        'Laminas\Form\FormElementManager' => 'FormElementManager',
-        'Laminas\Validator\ValidatorPluginManager' => 'ValidatorManager',
-        'Laminas\Mvc\I18n\Translator' => 'translator',
+        FormElementManager::class     => 'FormElementManager',
+        ValidatorPluginManager::class => 'ValidatorManager',
+        Translator::class             => 'translator',
     ];
-    
+
     /**
      * Create an object
      *
-     * @param  ContainerInterface $container
-     * @param  string             $requestedName
-     * @param  null|array         $options
+     * @param string $requestedName
+     * @param null|array $options
      * @return object
-     * @throws \Exception if unable to resolve the service.
-     * @throws \Exception if an exception is raised when
-     *     creating a service.
-     * @throws \Exception if any other error occurs
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
+     * @throws ReflectionException
      */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
-        $class = new \ReflectionClass($requestedName);
-        $parentLocator = $container->getServiceLocator();
-        if( $constructor = $class->getConstructor() )
-        {
-            if( $params = $constructor->getParameters() )
-            {
-                $parameter_instances = [];
-                foreach( $params as $p )
-                {
-                    
-                    if( $p->getClass() ) {
+        $class = new ReflectionClass($requestedName);
+        if ($constructor = $class->getConstructor()) {
+            if ($params = $constructor->getParameters()) {
+                $parameterInstances = [];
+                foreach ($params as $p) {
+                    if ($p->getClass()) {
                         $cn = $p->getClass()->getName();
                         if (array_key_exists($cn, $this->aliases)) {
                             $cn = $this->aliases[$cn];
                         }
-                        
+
                         try {
-                            $parameter_instances[] = $parentLocator->get($cn);
-                        }
-                        catch (\Exception $x) {
-                            echo __CLASS__
+                            $parameterInstances[] = $container->get($cn);
+                        } catch (Exception) {
+                            echo self::class
                             . " couldn't create an instance of $cn to satisfy the constructor for $requestedName.";
                             exit;
                         }
+                    } else {
+                        if ($p->isArray() && $p->getName() === 'config') {
+                            $parameterInstances[] = $container->get('config');
+                        }
                     }
-                    else{
-                        if( $p->isArray() && $p->getName() == 'config' )
-                            $parameter_instances[] = $parentLocator->get('config');
-                    }
-                    
                 }
-                return $class->newInstanceArgs($parameter_instances);
+                return $class->newInstanceArgs($parameterInstances);
             }
         }
-        
-        return new $requestedName;
+
+        return new $requestedName();
     }
 }
