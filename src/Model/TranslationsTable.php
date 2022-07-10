@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace JTranslate\Model;
 
+use Closure;
 use DateTime;
 use DateTimeZone;
 use Exception;
 use InvalidArgumentException;
 use JUser\Model\UserTable;
-use Laminas\Cache\Storage\StorageInterface;
 use Laminas\Code\Generator\FileGenerator;
 use Laminas\Code\Generator\ValueGenerator;
 use Laminas\Db\Adapter\Adapter;
@@ -17,10 +17,10 @@ use Laminas\Db\Adapter\AdapterInterface;
 use Laminas\Db\Adapter\Driver\ResultInterface;
 use Laminas\Db\ResultSet\ResultSet;
 use Laminas\Db\Sql\Sql;
+use Laminas\Db\Sql\Where;
 use Laminas\Db\TableGateway\TableGatewayInterface;
-use Laminas\EventManager\EventManagerInterface;
 use Laminas\Mvc\MvcEvent;
-use SionModel\Db\Model\SionCacheTrait;
+use SionModel\Service\SionCacheService;
 
 use function array_key_exists;
 use function array_keys;
@@ -39,33 +39,21 @@ use function strlen;
 
 class TranslationsTable
 {
-    use SionCacheTrait;
-
     private array $phrasesInDb       = [];
     private array $newMissingPhrases = [];
     private array $arrayFilePatterns = [];
     private array $userModules       = [];
     private string $filePattern      = '%s.lang.php';
-/**
- * The full path to the root of the MVC project
- *
- * @var ?string $rootDirectory
- */
 
     public function __construct(
         private AdapterInterface $adapter,
         private TableGatewayInterface $phrasesGateway,
         private TableGatewayInterface $translationsGateway,
-        StorageInterface $cache,
         private array $config,
         private UserTable $userTable,
-        private string $rootDirectory,
-        private EventManagerInterface $eventManager,
+        private SionCacheService $sionCacheService,
         private ?int $actingUserId = null
     ) {
-        $this->setPersistentCache($cache);
-        $this->wireOnFinishTrigger($eventManager);
-        $eventManager->attach(MvcEvent::EVENT_FINISH, [$this, 'finishUp'], -1);
         $this->phrasesInDb = $this->getPhraseKeysFromDb();
     }
 
@@ -87,15 +75,29 @@ ORDER BY `text_domain`, `phrase`";
             if (! $fromAllProjects && $row['project'] !== $this->config['project_name']) {
                 continue;
             }
-                         $userId = (int) $row['modified_by'];
-            $user                = isset($userId) && isset($users[$userId]) ? $users[$userId] : null;
+            $userId = (int) $row['modified_by'];
+            $user   = $users[$userId] ?? null;
             if (isset($return[$row['translation_phrase_id']])) {
                 $return[$row['translation_phrase_id']][$row['locale']]                = $row['translation'];
                 $return[$row['translation_phrase_id']][$row['locale'] . 'Id']         = $row['translation_id'];
                 $return[$row['translation_phrase_id']][$row['locale'] . 'ModifiedBy'] = $user;
-                $return[$row['translation_phrase_id']][$row['locale'] . 'ModifiedOn'] = isset($row['modified_on']) ? DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc) : null;
+                $return[$row['translation_phrase_id']][$row['locale'] . 'ModifiedOn'] = isset($row['modified_on'])
+                    ? DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc)
+                    : null;
             } else {
-                $return[$row['translation_phrase_id']] = ['phraseId' => $row['translation_phrase_id'], $row['locale'] => $row['translation'], $row['locale'] . 'Id' => $row['translation_id'], $row['locale'] . 'ModifiedBy' => $user, $row['locale'] . 'ModifiedOn' => $row['modified_on'] ? DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc) : null, 'textDomain' => $row['text_domain'], 'phrase' => $row['phrase'], 'originRoute' => $row['origin_route'], 'addedOn' => $row['added_on']];
+                $return[$row['translation_phrase_id']] = [
+                    'phraseId'                    => $row['translation_phrase_id'],
+                    $row['locale']                => $row['translation'],
+                    $row['locale'] . 'Id'         => $row['translation_id'],
+                    $row['locale'] . 'ModifiedBy' => $user,
+                    $row['locale'] . 'ModifiedOn' => $row['modified_on']
+                        ? DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc)
+                        : null,
+                    'textDomain'                  => $row['text_domain'],
+                    'phrase'                      => $row['phrase'],
+                    'originRoute'                 => $row['origin_route'],
+                    'addedOn'                     => $row['added_on'],
+                ];
             }
         }
          return $return;
@@ -125,9 +127,8 @@ HAVING PhraseLocaleCount < ?";
 
     /**
      * @return ResultInterface[]
-     * @psalm-return list<ResultInterface>
      */
-    public function updatePhrase(int $id, iterable $data): array
+    public function updatePhrase(int $id, array $data): array
     {
         $phrase     = $this->getTranslations()[$id];
         $dateString = date_format(new DateTime('now', new DateTimeZone('UTC')), 'Y-m-d H:i:s');
@@ -140,24 +141,29 @@ HAVING PhraseLocaleCount < ?";
                 //         if ($fromAllProjects) {
                 //             $cacheKey.='-from-all-projects';
                 //         }
-                //         if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
+                //         if (null !== ($cache = $this->sionCacheService->fetchCachedEntityObjects($cacheKey))) {
                 //             return $cache;
                 //         }
                 //@todo avoid setting null locale keys for records without any translations
                 //skip rows from other projects if we don't need them
                 //if we already already have an entry for this phrase
-                //         $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
+                //         $this->sionCacheService->cacheEntityObjects($cacheKey, $return, ['phrase']);
 
                 ! isset($data[$key]) || ! $data[$key] || (isset($phrase[$key]) && $data[$key] === $phrase[$key])
             ) {
                  continue;
             }
             if (isset($data[$key . 'Id']) && $data[$key . 'Id'] && $phrase[$key . 'Id']) {
-                                  $sql = new Sql($this->adapter);
-                $update                = $sql->update($this->config['translations_table_name'])
-                    ->set(['translation' => $data[$key], 'modified_on' => $dateString, 'modified_by' => $this->actingUserId])->where(['translation_id' => $data[$key . 'Id']]);
-                $statement             = $sql->prepareStatementForSqlObject($update);
-                $results[]             = $statement->execute();
+                $sql       = new Sql($this->adapter);
+                $update    = $sql->update($this->config['translations_table_name'])
+                    ->set([
+                        'translation' => $data[$key],
+                        'modified_on' => $dateString,
+                        'modified_by' => $this->actingUserId,
+                    ])
+                    ->where(['translation_id' => $data[$key . 'Id']]);
+                $statement = $sql->prepareStatementForSqlObject($update);
+                $results[] = $statement->execute();
             } else {
                  $sql      = new Sql($this->adapter);
                 $insert    = $sql->insert($this->config['translations_table_name'])->values([
@@ -171,7 +177,7 @@ HAVING PhraseLocaleCount < ?";
                 $results[] = $statement->execute();
             }
         }
-        $this->removeDependentCacheItems(['phrase']);
+        $this->sionCacheService->removeDependentCacheItems(['phrase']);
         return $results;
     }
 
@@ -205,7 +211,7 @@ HAVING PhraseLocaleCount < ?";
         }
 
         if ($refreshCache) {
-            $this->removeDependentCacheItems(['phrase']);
+            $this->sionCacheService->removeDependentCacheItems(['phrase']);
         }
     }
 
@@ -240,7 +246,7 @@ HAVING PhraseLocaleCount < ?";
     public function getPhraseKeysFromDb(): array
     {
         $cacheKey = 'phrase-keys';
-        if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
+        if (null !== ($cache = $this->sionCacheService->fetchCachedEntityObjects($cacheKey))) {
             return $cache;
         }
         $where = new Sql($this->adapter);
@@ -258,23 +264,21 @@ HAVING PhraseLocaleCount < ?";
         $return  = [];
         foreach ($results as $tran) {
             if (array_key_exists($tran['text_domain'], $return)) {
-                array_push($return[$tran['text_domain']], $tran['phrase']);
+                $return[$tran['text_domain']][] = $tran['phrase'];
             } else {
                 $return[$tran['text_domain']] = [
                     $tran['phrase'],
                 ];
             }
         }
-        $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
+        $this->sionCacheService->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
     }
 
     /**
      *  Add to the list of translations to add to the database
-     *
-     * @param array $params
      */
-    protected function addMissingPhrase($params): static
+    protected function addMissingPhrase(array $params): void
     {
         if (! isset($this->phrasesInDb[$params['text_domain']])) {
             $this->phrasesInDb[$params['text_domain']] = [$params['message']];
@@ -286,13 +290,12 @@ HAVING PhraseLocaleCount < ?";
         } else {
             $this->newMissingPhrases[$params['text_domain']][] = $params['message'];
         }
-        return $this;
     }
 
     /**
      * @param array $params
      */
-    public function reportMissingTranslation($params): static
+    public function reportMissingTranslation(array $params): void
     {
         if (
             ! isset($this->phrasesInDb[$params['text_domain']]) ||
@@ -300,18 +303,18 @@ HAVING PhraseLocaleCount < ?";
         ) {
             $this->addMissingPhrase($params);
         }
-        return $this;
     }
 
     /**
      * Returns the translated text of the db in a 4-dimensional array
      *
      * @return string[][][]
+     * @throws Exception
      */
-    public function getTranslatedText()
+    public function getTranslatedText(): array
     {
         $cacheKey = 'translated-text';
-        if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
+        if (null !== ($cache = $this->sionCacheService->fetchCachedEntityObjects($cacheKey))) {
             return $cache;
         }
         $sql       = "SELECT t.`translation_id`,p.`translation_phrase_id`,
@@ -341,14 +344,14 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 ];
             }
         }
-        $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
+        $this->sionCacheService->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
     }
 
     public function finishUp(MvcEvent $e): void
     {
         $match = $e->getRouteMatch();
-        $this->writeMissingPhrasesToDb($match ? $match->getMatchedRouteName() : null);
+        $this->writeMissingPhrasesToDb($match?->getMatchedRouteName());
     }
 
     /**
@@ -368,21 +371,22 @@ ORDER BY `locale`, `text_domain`, `phrase`";
 
                 //if the current text domain is a module, then save it there. If not, to the root.
                 if (array_key_exists($textDomain, $this->userModules)) {
-                    $folder = $this->rootDirectory . '/module/' . $textDomain . '/language';
-                    if (! file_exists($this->rootDirectory . '/module/' . $textDomain)) {
-                        mkdir($this->rootDirectory . '/module/' . $textDomain, 0775, true);
-                        @chmod($this->rootDirectory . '/module/' . $textDomain, 0775);
+                    $folder = 'module/' . $textDomain . '/language';
+                    if (! file_exists('module/' . $textDomain)) {
+                        mkdir('module/' . $textDomain, 0775, true);
+                        @chmod('module/' . $textDomain, 0775);
                     }
                 } else {
-                    $folder = $this->rootDirectory . '/language/' . $textDomain;
-                    if (! file_exists($this->rootDirectory . '/language')) {
-                        mkdir($this->rootDirectory . '/language', 0775, true);
-                        @chmod($this->rootDirectory . '/language', 0775);
+                    $folder = 'language/' . $textDomain;
+                    if (! file_exists('language')) {
+                        mkdir('language', 0775, true);
+                        @chmod('language', 0775);
                     }
                 }
                 if (! is_dir($folder)) {
                     mkdir($folder, 0775, true);
-                    @chmod($folder, 0775); /** @see https://stackoverflow.com/questions/3764973/php-mkdir-chmod-and-permissions#3769014 */
+                    /** @see https://stackoverflow.com/questions/3764973/php-mkdir-chmod-and-permissions#3769014 */
+                    @chmod($folder, 0775);
                 }
                 $fileToWrite = $folder . '/' . sprintf($this->filePattern, $locale);
                 file_put_contents($fileToWrite, $code);
@@ -483,7 +487,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 }
             }
         }
-        $this->removeDependentCacheItems(['phrase']);
+        $this->sionCacheService->removeDependentCacheItems(['phrase']);
         if ($weFoundAPreviousMatch) {
             $this->writePhpTranslationArrays();
         }
@@ -498,39 +502,12 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         return $this->userTable;
     }
 
-    /**
-     * @param Where|Closure|string|array $where
-     * @param string
-     * @param array
-     * @param (int|mixed)[]|null $sqlArgs
-     * @return array
-     * @psalm-param 'SELECT p.`translation_phrase_id`, COUNT(*) AS PhraseLocaleCount
-FROM `trans_phrases` p
-LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
-WHERE (`project` = ?)
-GROUP BY translation_phrase_id
-HAVING PhraseLocaleCount < ?'|'SELECT t.`translation_id`,p.`translation_phrase_id`,
-t.`locale`, t.`translation`, p.`text_domain`,  p.`phrase`
-FROM `trans_phrases` p
-INNER JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
-WHERE (p.`project` = ?)
-ORDER BY `locale`, `text_domain`, `phrase`'|'SELECT t.`translation_id`,p.`translation_phrase_id`, t.`locale`,
-t.`translation`,
-t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`, p.`origin_route`
-FROM `trans_phrases` p
-LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
-WHERE (p.`project` = ?)
-ORDER BY `text_domain`, `phrase`'|null $sql
-     */
     public function fetchSome(
-        Sql|null $where,
+        Where|Closure|string|array|Sql|null $where,
         string|null $sql = null,
         array|null $sqlArgs = null,
         ?TableGatewayInterface $gateway = null
     ): array {
-        if (! isset($gateway)) {
-            $gateway = $this->phrasesGateway;
-        }
         if (! isset($where) && ! isset($sql)) {
             throw new InvalidArgumentException('No query requested.');
         }
@@ -540,6 +517,9 @@ ORDER BY `text_domain`, `phrase`'|null $sql
             }
             $result = $this->adapter->query($sql, $sqlArgs);
         } else {
+            if (! isset($gateway)) {
+                $gateway = $this->phrasesGateway;
+            }
             $result = $gateway->select($where);
         }
 
@@ -548,14 +528,6 @@ ORDER BY `text_domain`, `phrase`'|null $sql
             $return[] = $row;
         }
         return $return;
-    }
-
-    /**
-     * @param array $userModules
-     */
-    public function setUserModules(array $userModules): void
-    {
-        $this->userModules = $userModules;
     }
 
     public static function getLocaleNames(): array

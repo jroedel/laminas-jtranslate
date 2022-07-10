@@ -8,9 +8,11 @@ use JTranslate\Model\TranslationsTable;
 use JUser\Model\UserTable;
 use Laminas\Db\Adapter\Adapter;
 use Laminas\Db\TableGateway\TableGateway;
+use Laminas\Mvc\MvcEvent;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use LmcUser\Service\User;
 use Psr\Container\ContainerInterface;
+use SionModel\Service\SionCacheService;
 
 use function getcwd;
 
@@ -20,30 +22,29 @@ class TranslationsTableFactory implements FactoryInterface
     {
         /** @var Adapter $adapter */
         $adapter               = $container->get(Adapter::class);
-        $cache                 = $container->get('JTranslate\Cache');
-        $em                    = $container->get('Application')->getEventManager();
         $config                = $container->get('JTranslate\Config');
         $translationsTableName = $config['translations_table_name'] ?: 'trans_translations';
         $phrasesTableName      = $config['phrases_table_name'] ?: 'trans_phrases';
         $translationsGateway   = new TableGateway($translationsTableName, $adapter);
         $phrasesGateway        = new TableGateway($phrasesTableName, $adapter);
-        $rootDirectory         = $config['root_directory'] ?? getcwd();
 
         /** @var User $userService */
-        $userService = $container->get('lmcuser_user_service');
-        $user        = $userService->getAuthService()->getIdentity();
-        $userId      = isset($user) ? (int) $user->id : null;
-        $userTable   = $container->get(UserTable::class);
-        return new TranslationsTable(
+        $userService      = $container->get('lmcuser_user_service');
+        $user             = $userService->getAuthService()->getIdentity();
+        $userId           = isset($user) ? (int) $user->id : null;
+        $userTable        = $container->get(UserTable::class);
+        $sionCacheService = $container->get(SionCacheService::class);
+        $table            = new TranslationsTable(
             adapter: $adapter,
             phrasesGateway: $phrasesGateway,
             translationsGateway: $translationsGateway,
-            cache: $cache,
             config: $config,
             userTable: $userTable,
-            rootDirectory: $rootDirectory,
-            eventManager: $em,
+            sionCacheService: $sionCacheService,
             actingUserId: $userId
         );
+        $em = $container->get('Application')->getEventManager();
+        $em->attach(MvcEvent::EVENT_FINISH, [$table, 'finishUp'], -1);
+        return $table;
     }
 }

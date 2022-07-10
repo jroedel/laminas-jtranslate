@@ -17,7 +17,6 @@ return [
     'jtranslate'         => [
         'phrases_table_name'      => 'trans_phrases',
         'translations_table_name' => 'trans_translations',
-        'root_directory'          => getcwd(),
         'locales_to_translate'    => ['es_ES', 'de_DE', 'pt_BR'],
         'key_locale'              => 'en_US',
         'cache_options'           => [
