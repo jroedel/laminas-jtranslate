@@ -2,12 +2,6 @@
 
 declare(strict_types=1);
 
-/**
- * Zend Framework (http://framework.zend.com/)
- *
- * @link      http://github.com/zendframework/zf2 for the canonical source repository
- */
-
 namespace JTranslate\View\Helper\Service;
 
 use JTranslate\View\Helper\NowMessenger;
@@ -27,11 +21,10 @@ class NowMessengerFactory implements FactoryInterface
      */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
-        $serviceLocator               = $container->getServiceLocator();
-        $controllerPluginManager      = $serviceLocator->get('ControllerPluginManager');
+        $controllerPluginManager      = $container->get('ControllerPluginManager');
         $nowMessengerControllerPlugin = $controllerPluginManager->get('nowMessenger');
         /** @var HelperPluginManager $helperPluginManager */
-        $helperPluginManager = $serviceLocator->get('ViewHelperManager');
+        $helperPluginManager = $container->get('ViewHelperManager');
         $escapeHtml          = $helperPluginManager->get(EscapeHtml::class);
         return new NowMessenger($nowMessengerControllerPlugin, $escapeHtml);
     }

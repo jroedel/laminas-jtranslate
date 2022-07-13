@@ -14,8 +14,6 @@ use LmcUser\Service\User;
 use Psr\Container\ContainerInterface;
 use SionModel\Service\SionCacheService;
 
-use function getcwd;
-
 class TranslationsTableFactory implements FactoryInterface
 {
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
@@ -43,7 +41,7 @@ class TranslationsTableFactory implements FactoryInterface
             sionCacheService: $sionCacheService,
             actingUserId: $userId
         );
-        $em = $container->get('Application')->getEventManager();
+        $em               = $container->get('Application')->getEventManager();
         $em->attach(MvcEvent::EVENT_FINISH, [$table, 'finishUp'], -1);
         return $table;
     }

@@ -24,7 +24,6 @@ use SionModel\Service\SionCacheService;
 
 use function array_key_exists;
 use function array_keys;
-use function array_push;
 use function chmod;
 use function count;
 use function date_format;
@@ -528,6 +527,14 @@ ORDER BY `locale`, `text_domain`, `phrase`";
             $return[] = $row;
         }
         return $return;
+    }
+
+    /**
+     * @param array $userModules
+     */
+    public function setUserModules(array $userModules): void
+    {
+        $this->userModules = $userModules;
     }
 
     public static function getLocaleNames(): array

@@ -1,46 +1,42 @@
 <?php
+
+declare(strict_types=1);
+
 namespace JTranslate\I18n\Translator;
+
+use JTranslate\Model\TranslationsTable;
 use Laminas\EventManager\AbstractListenerAggregate;
 use Laminas\EventManager\Event;
 use Laminas\EventManager\EventManagerInterface;
 use Laminas\I18n\Translator\Translator;
-use JTranslate\Model\TranslationsTable;
+
+use function array_key_exists;
+
 class TranslatorEventListener extends AbstractListenerAggregate
 {
-    /** @var TranslationsTable $table **/
-    protected $table;
-    
-    /**
-     * 
-     * @var string[]
-     */
-    protected $locales;
-    /**
-     * 
-     * @param TranslationsTable $table
-     */
-    public function __construct($table, $locales)
+    public function __construct(private TranslationsTable $table, private array $locales)
     {
-        $this->table    = $table;
-        $this->locales  = $locales;
     }
-    
-    public function attach(EventManagerInterface $events, $priority = 1)
+
+    /**
+     * @param int $priority
+     */
+    public function attach(EventManagerInterface $events, $priority = 1): void
     {
-        $this->listeners[] = $events->attach(Translator::EVENT_MISSING_TRANSLATION, array($this, 'missingTranslation'), $priority);
+        $this->listeners[] = $events->attach(
+            Translator::EVENT_MISSING_TRANSLATION,
+            [$this, 'missingTranslation'],
+            $priority
+        );
     }
-    
+
     /**
      * @todo Rethink my filter of locales
-     *
-     * @param Event $e
-     *
-     * @return void
      */
-    public function missingTranslation(Event $e)
+    public function missingTranslation(Event $e): void
     {
         $params = $e->getParams();
-        if (!array_key_exists($params['locale'], $this->locales)) {
+        if (! array_key_exists($params['locale'], $this->locales)) {
             return;
         }
         $this->table->reportMissingTranslation($params);
