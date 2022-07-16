@@ -397,10 +397,15 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     /**
      * Check the TranslationTable object for new missing translations and write them to the database to be translated
      *
-     * @return ResultInterface[]
+     * @todo this function needs a lot of work
+     * @todo we should really check if we can bring phrases into the translator directly from the database.
+     * We retrieve them anyway
      */
-    public function writeMissingPhrasesToDb(?string $routeName = null)
+    public function writeMissingPhrasesToDb(?string $routeName = null): void
     {
+        if (empty($this->newMissingPhrases)) {
+            return;
+        }
         $dateString   = date_format(new DateTime('now', new DateTimeZone('UTC')), 'Y-m-d H:i:s');
         $translations = $this->getTranslations(true);
 
@@ -408,7 +413,6 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         if (! in_array($this->config['key_locale'], $localesToSearch)) {
             $localesToSearch[] = $this->config['key_locale'];
         }
-
         //if we find something, we'll have to write the php arrays
         $weFoundAPreviousMatch = false;
         $result                = [];
@@ -490,7 +494,6 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         if ($weFoundAPreviousMatch) {
             $this->writePhpTranslationArrays();
         }
-        return $result;
     }
 
     public function getUserTable(): UserTable
