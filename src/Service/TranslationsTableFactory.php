@@ -29,7 +29,7 @@ class TranslationsTableFactory implements FactoryInterface
         /** @var User $userService */
         $userService      = $container->get('lmcuser_user_service');
         $user             = $userService->getAuthService()->getIdentity();
-        $userId           = isset($user) ? (int) $user->id : null;
+        $userId           = isset($user) ? (int) $user->getId() : null;
         $userTable        = $container->get(UserTable::class);
         $sionCacheService = $container->get(SionCacheService::class);
         $table            = new TranslationsTable(
