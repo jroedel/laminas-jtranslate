@@ -1,9 +1,9 @@
 {
-    "name": "jroedel/zf3-jtranslate",
+    "name": "jroedel/laminas-jtranslate",
     "type": "library",
-    "description": "Zend Framework 3 module to provide a translation GUI",
-    "keywords": ["Zend Framework 3","translation", "gui"],
-    "homepage": "https://github.com/jroedel/zf2-jtranslate",
+    "description": "Laminas module to provide a translation GUI",
+    "keywords": ["laminas","translation", "gui"],
+    "homepage": "https://github.com/jroedel/laminas-jtranslate",
     "license": "MIT",
     "authors": [
         {
@@ -13,11 +13,11 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/jroedel/zf2-jtranslate/issues"
+        "issues": "https://github.com/jroedel/laminas-jtranslate/issues"
     },
     "minimum-stability" : "stable",
     "require": {
-        "php": ">=5.3.3",
+        "php": "^8.0",
         "laminas/laminas-code": "^3.0.2 || ^2.5.0",
         "laminas/laminas-i18n": "^2.5.0",
 		"cakephp/utility": "^3.2.0",
