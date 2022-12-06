@@ -10,8 +10,6 @@ use Laminas\View\Helper\EscapeHtml;
 use Laminas\View\HelperPluginManager;
 use Psr\Container\ContainerInterface;
 
-use function var_dump;
-
 class NowMessengerFactory implements FactoryInterface
 {
     /**
