@@ -1,6 +1,6 @@
 # zf3-jtranslate
 
-Zend Framework 3 module to provide a translation GUI. Uses Zend\Db. All unknown non-translated phrases are added to the database. This can be used to translate both static and dynamic (ex. Database values) strings. This module can be customized to translate strings into any number of languages (defaults to English, Spanish, German and Portuguese).
+Zend Framework 3 module to provide a translation GUI. Uses Laminas\Db. All unknown non-translated phrases are added to the database. This can be used to translate both static and dynamic (ex. Database values) strings. This module can be customized to translate strings into any number of languages (defaults to English, Spanish, German and Portuguese).
 
 This repository is used in a production website, but is far from perfect. Any help to make it more useful for the world is more than welcome!
 

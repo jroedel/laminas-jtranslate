@@ -1,11 +1,11 @@
 <?php
 namespace JTranslate;
 
-use Zend\Router\Http\Segment;
-use Zend\Router\Http\Literal;
-use Zend\Db\Adapter\Adapter;
-use Zend\Mvc\I18n\Translator;
-use Zend\Serializer\Adapter\Json;
+use Laminas\Router\Http\Segment;
+use Laminas\Router\Http\Literal;
+use Laminas\Db\Adapter\Adapter;
+use Laminas\Mvc\I18n\Translator;
+use Laminas\Serializer\Adapter\Json;
 
 return [
     'jtranslate' => [
@@ -19,7 +19,7 @@ return [
         ],
         'key_locale' => 'en_US',
         
-        // cache options have to be compatible with Zend\Cache\StorageFactory::factory
+        // cache options have to be compatible with Laminas\Cache\StorageFactory::factory
         'cache_options' => [
             'adapter' => [
                 'name'    => 'filesystem',

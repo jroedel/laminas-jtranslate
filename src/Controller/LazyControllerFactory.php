@@ -2,7 +2,7 @@
 namespace JTranslate\Controller;
 
 use Interop\Container\ContainerInterface;
-use Zend\ServiceManager\Factory\AbstractFactoryInterface;
+use Laminas\ServiceManager\Factory\AbstractFactoryInterface;
 
 class LazyControllerFactory implements AbstractFactoryInterface
 {
@@ -17,9 +17,9 @@ class LazyControllerFactory implements AbstractFactoryInterface
      * @var array
      */
     protected $aliases = [
-        'Zend\Form\FormElementManager' => 'FormElementManager',
-        'Zend\Validator\ValidatorPluginManager' => 'ValidatorManager',
-        'Zend\Mvc\I18n\Translator' => 'translator',
+        'Laminas\Form\FormElementManager' => 'FormElementManager',
+        'Laminas\Validator\ValidatorPluginManager' => 'ValidatorManager',
+        'Laminas\Mvc\I18n\Translator' => 'translator',
     ];
     
     /**

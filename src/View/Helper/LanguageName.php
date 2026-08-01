@@ -1,7 +1,7 @@
 <?php
 namespace JTranslate\View\Helper;
 
-use Zend\View\Helper\AbstractHelper;
+use Laminas\View\Helper\AbstractHelper;
 use SionModel\I18n\LanguageSupport;
 
 class LanguageName extends AbstractHelper

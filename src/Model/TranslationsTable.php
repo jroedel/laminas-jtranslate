@@ -1,21 +1,21 @@
 <?php
 namespace JTranslate\Model;
 
-use Zend\Db\Adapter\AdapterAwareInterface;
-use Zend\Db\TableGateway\AbstractTableGateway;
-use Zend\Db\Adapter\Adapter;
-use Zend\Db\TableGateway\TableGatewayInterface;
-use Zend\Cache\Storage\StorageInterface;
-use Zend\Db\Adapter\AdapterInterface;
-use Zend\Db\Sql\Sql;
-use Zend\Db\Sql\Where;
+use Laminas\Db\Adapter\AdapterAwareInterface;
+use Laminas\Db\TableGateway\AbstractTableGateway;
+use Laminas\Db\Adapter\Adapter;
+use Laminas\Db\TableGateway\TableGatewayInterface;
+use Laminas\Cache\Storage\StorageInterface;
+use Laminas\Db\Adapter\AdapterInterface;
+use Laminas\Db\Sql\Sql;
+use Laminas\Db\Sql\Where;
 use ZfcUser\Entity\UserInterface;
 use JUser\Model\UserTable;
-use Zend\Code\Generator\ValueGenerator;
-use Zend\Code\Generator\FileGenerator;
-use Zend\Db\ResultSet\ResultSet;
+use Laminas\Code\Generator\ValueGenerator;
+use Laminas\Code\Generator\FileGenerator;
+use Laminas\Db\ResultSet\ResultSet;
 use SionModel\Db\Model\SionCacheTrait;
-use Zend\Mvc\MvcEvent;
+use Laminas\Mvc\MvcEvent;
 
 class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
 {
@@ -477,7 +477,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     /**
      * Check the TranslationTable object for new missing translations and write them to the database to be translated
      * @param string $routeName
-     * @return \Zend\Db\Adapter\Driver\ResultInterface[]
+     * @return \Laminas\Db\Adapter\Driver\ResultInterface[]
      */
     public function writeMissingPhrasesToDb($routeName = null)
     {

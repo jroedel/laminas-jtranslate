@@ -9,9 +9,9 @@
 
 namespace JTranslate\View\Helper\Service;
 
-use Zend\ServiceManager\Factory\FactoryInterface;
+use Laminas\ServiceManager\Factory\FactoryInterface;
 use Interop\Container\ContainerInterface;
-use Zend\View\Helper\FlashMessenger;
+use Laminas\View\Helper\FlashMessenger;
 use JTranslate\View\Helper\NowMessenger;
 
 class NowMessengerFactory implements FactoryInterface

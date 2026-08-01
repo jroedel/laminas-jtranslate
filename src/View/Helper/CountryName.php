@@ -3,7 +3,7 @@
 
 namespace JTranslate\View\Helper;
 
-use Zend\View\Helper\AbstractHelper;
+use Laminas\View\Helper\AbstractHelper;
 use JTranslate\Model\CountriesInfo;
 
 class CountryName extends AbstractHelper

@@ -1,9 +1,9 @@
 <?php
 namespace JTranslate\I18n\Translator;
-use Zend\EventManager\AbstractListenerAggregate;
-use Zend\EventManager\Event;
-use Zend\EventManager\EventManagerInterface;
-use Zend\I18n\Translator\Translator;
+use Laminas\EventManager\AbstractListenerAggregate;
+use Laminas\EventManager\Event;
+use Laminas\EventManager\EventManagerInterface;
+use Laminas\I18n\Translator\Translator;
 use JTranslate\Model\TranslationsTable;
 class TranslatorEventListener extends AbstractListenerAggregate
 {

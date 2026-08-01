@@ -1,8 +1,8 @@
 <?php
 namespace JTranslate\Form;
 
-use Zend\Form\Form;
-use Zend\InputFilter\InputFilterProviderInterface;
+use Laminas\Form\Form;
+use Laminas\InputFilter\InputFilterProviderInterface;
 
 class DeletePhraseForm extends Form implements InputFilterProviderInterface
 {

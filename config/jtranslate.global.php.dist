@@ -15,7 +15,7 @@ return [
     //here you can configure the database adapter and translator jtranslate uses
     'service_manager' => [
         'aliases' => [
-            'jtranslate_db_adapter' => 'Zend\Db\Adapter\Adapter',
+            'jtranslate_db_adapter' => 'Laminas\Db\Adapter\Adapter',
             'jtranslate_translator' => 'MvcTranslator',
         ],
     ],

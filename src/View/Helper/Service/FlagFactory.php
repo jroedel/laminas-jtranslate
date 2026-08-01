@@ -1,7 +1,7 @@
 <?php
 namespace JTranslate\View\Helper\Service;
 
-use Zend\ServiceManager\Factory\FactoryInterface;
+use Laminas\ServiceManager\Factory\FactoryInterface;
 use Interop\Container\ContainerInterface;
 use JTranslate\Model\CountriesInfo;
 use JTranslate\View\Helper\Flag;
