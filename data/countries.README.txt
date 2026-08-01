@@ -1,0 +1,5 @@
+countries.json is from mledoze/countries v1.8 (https://github.com/mledoze/countries),
+data licensed under the Open Database License (ODbL) 1.0.
+Vendored here 2026-08-02 when the composer dependency was dropped (its newer
+versions require PHP >=8.2 and its old versions pin vulnerable symfony/yaml).
+Refresh by downloading a newer dist/countries.json from upstream.
