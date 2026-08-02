@@ -7,6 +7,7 @@ use Laminas\Db\Adapter\Adapter;
 use JTranslate\Model\TranslationsTable;
 use Laminas\Db\TableGateway\TableGateway;
 use JUser\Model\UserTable;
+use SionModel\Service\ActingUserProviderInterface;
 
 /**
  * Factory responsible of building the {@see TranslationsTable} service
@@ -33,9 +34,9 @@ class TranslationsTableFactory implements FactoryInterface
         $phrasesGateway = new TableGateway($phrasesTableName , $adapter);
         $rootDirectory = isset($config['root_directory']) ? $config['root_directory'] : getcwd();
 
-        $user = $container->get('JUser\AuthService')->getIdentity();
+        $actingUserProvider = $container->get(ActingUserProviderInterface::class);
         $userTable = $container->get(UserTable::class);
-        $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable, $rootDirectory, $em);
+        $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $actingUserProvider, $userTable, $rootDirectory, $em);
         return $table;
     }
 }

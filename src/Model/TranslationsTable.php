@@ -9,12 +9,12 @@ use Laminas\Cache\Storage\StorageInterface;
 use Laminas\Db\Adapter\AdapterInterface;
 use Laminas\Db\Sql\Sql;
 use Laminas\Db\Sql\Where;
-use JUser\Model\User;
 use JUser\Model\UserTable;
 use Laminas\Code\Generator\ValueGenerator;
 use Laminas\Code\Generator\FileGenerator;
 use Laminas\Db\ResultSet\ResultSet;
 use SionModel\Db\Model\SionCacheTrait;
+use SionModel\Service\ActingUserProviderInterface;
 use Laminas\Mvc\MvcEvent;
 
 class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
@@ -58,9 +58,9 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
     /**
      *
-     * @var User $actingUser
+     * @var ActingUserProviderInterface|null $actingUserProvider
      */
-    protected $actingUser;
+    protected $actingUserProvider;
 
     /**
      *
@@ -95,13 +95,13 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      * @param array $config
      * @todo throw error if no project_name config key exists
      */
-    public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUser, $userTable, $rootDirectory, $eventManager)
+    public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUserProvider, $userTable, $rootDirectory, $eventManager)
     {
         $this->phrasesGateway       = $phrasesGateway;
         $this->translationsGateway  = $translationsGateway;
         $this->adapter              = $phrasesGateway->getAdapter();
         $this->config               = $config;
-        $this->actingUser           = $actingUser;
+        $this->actingUserProvider   = $actingUserProvider;
         $this->userTable            = $userTable;
         $this->newMissingPhrases    = [];
 
@@ -113,6 +113,18 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
         $this->phrasesInDb          = $this->getPhraseKeysFromDb();
         $this->setRootDirectory($rootDirectory);
+    }
+
+    /**
+     *
+     * @return int|null
+     */
+    protected function getActingUserId(): ?int
+    {
+        if (null === $this->actingUserProvider) {
+            return null;
+        }
+        return $this->actingUserProvider->getActingUserId();
     }
 
     /**
@@ -228,7 +240,7 @@ HAVING PhraseLocaleCount < ?";
                     ->set([
                         'translation' => $data[$key],
                         'modified_on' => $dateString,
-                        'modified_by' => isset($this->actingUser) ? $this->actingUser->id : null,
+                        'modified_by' => $this->getActingUserId(),
                     ])
                     ->where(['translation_id' => $data[$key.'Id']]);
                 $statement = $sql->prepareStatementForSqlObject($update);
@@ -242,7 +254,7 @@ HAVING PhraseLocaleCount < ?";
                     'locale' => $key,
                     'translation' => $data[$key],
                     'modified_on' => $dateString,
-                    'modified_by' => isset($this->actingUser) ? $this->actingUser->id : null,
+                    'modified_by' => $this->getActingUserId(),
                 ]);
                 $statement = $sql->prepareStatementForSqlObject($insert);
                 $results[] = $statement->execute();
@@ -528,7 +540,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                                         'modified_by' => (isset($translationPhrase[$locale.'ModifiedBy']) &&
                                             isset($translationPhrase[$locale.'ModifiedBy']['userId'])) ?
                                             $translationPhrase[$locale.'ModifiedBy']['userId'] :
-                                            (isset($this->actingUser) ? $this->actingUser->id : null),
+                                            $this->getActingUserId(),
                                         'modified_on' => $dateString,
                                     ];
                                 }
@@ -547,7 +559,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                         'translation_phrase_id' => $phrasesKeyId,
                         'locale' => $this->config['key_locale'],
                         'translation' => $phrase,
-                        'modified_by' => isset($this->actingUser) ? $this->actingUser->id : null,
+                        'modified_by' => $this->getActingUserId(),
                         'modified_on' => $dateString,
                     ];
                 }
