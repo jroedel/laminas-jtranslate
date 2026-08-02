@@ -33,9 +33,7 @@ class TranslationsTableFactory implements FactoryInterface
         $phrasesGateway = new TableGateway($phrasesTableName , $adapter);
         $rootDirectory = isset($config['root_directory']) ? $config['root_directory'] : getcwd();
 
-        /** @var $userService \ZfcUser\Service\User */
-        $userService = $container->get('zfcuser_user_service');
-        $user = $userService->getAuthService()->getIdentity();
+        $user = $container->get('JUser\AuthService')->getIdentity();
         $userTable = $container->get(UserTable::class);
         $table = new TranslationsTable($phrasesGateway, $translationsGateway, $cache, $config, $user, $userTable, $rootDirectory, $em);
         return $table;

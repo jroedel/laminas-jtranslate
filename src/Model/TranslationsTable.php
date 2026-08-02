@@ -9,7 +9,7 @@ use Laminas\Cache\Storage\StorageInterface;
 use Laminas\Db\Adapter\AdapterInterface;
 use Laminas\Db\Sql\Sql;
 use Laminas\Db\Sql\Where;
-use ZfcUser\Entity\UserInterface;
+use JUser\Model\User;
 use JUser\Model\UserTable;
 use Laminas\Code\Generator\ValueGenerator;
 use Laminas\Code\Generator\FileGenerator;
@@ -58,7 +58,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
     /**
      *
-     * @var UserInterface $actingUser
+     * @var User $actingUser
      */
     protected $actingUser;
 
