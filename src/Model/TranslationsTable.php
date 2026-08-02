@@ -158,8 +158,7 @@ t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`
 FROM `trans_phrases` p
 LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
 ORDER BY `text_domain`, `phrase`";
-        $sqlParams = [$this->config['project_name']];
-        $results = $this->fetchSome(null, $sql, $sqlParams);
+        $results = $this->fetchSome(null, $sql);
 
         $utc = new \DateTimeZone('UTC');
         $userTable = $this->getUserTable();
