@@ -273,7 +273,9 @@ class NowMessenger extends AbstractTranslatorHelper
     public function getPluginNowMessenger()
     {
         if (null === $this->pluginFlashMessenger) {
-            $this->setPluginFlashMessenger(new PluginNowMessenger());
+            //was setPluginFlashMessenger(), a method this class never had, so
+            //this lazy-init branch could only ever raise "undefined method"
+            $this->setPluginNowMessenger(new PluginNowMessenger());
         }
 
         return $this->pluginFlashMessenger;
