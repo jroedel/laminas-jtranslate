@@ -21,7 +21,7 @@ class NowMessengerFactory implements FactoryInterface
      *
      * @inheritdoc
      */
-    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
+    public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
         $serviceLocator = $container->getServiceLocator();
         $helper = new NowMessenger();

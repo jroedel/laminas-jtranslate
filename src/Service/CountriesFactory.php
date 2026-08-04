@@ -18,7 +18,7 @@ class CountriesFactory implements FactoryInterface
      *
      * @inheritdoc
      */
-    public function __invoke(ContainerInterface $container, $requestedName, array $options = null)
+    public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
         //data vendored from mledoze/countries, see module/JTranslate/data/countries.README.txt
         $countries = Json::decode(file_get_contents(__DIR__ . '/../../data/countries.json'));
