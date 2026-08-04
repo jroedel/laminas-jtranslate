@@ -10,8 +10,6 @@ use Laminas\Db\Adapter\AdapterInterface;
 use Laminas\Db\Sql\Sql;
 use Laminas\Db\Sql\Where;
 use JUser\Model\UserTable;
-use Laminas\Code\Generator\ValueGenerator;
-use Laminas\Code\Generator\FileGenerator;
 use Laminas\Db\ResultSet\ResultSet;
 use SionModel\Db\Model\SionCacheTrait;
 use SionModel\Service\ActingUserProviderInterface;
@@ -453,12 +451,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         $translations = $this->getTranslatedText();
         foreach ($translations as $textDomain => $localeTrans) {
             foreach ($localeTrans as $locale => $trans) {
-                //create an array value generator to write the file
-                $generator = new ValueGenerator($trans, 'array');
-                $file = FileGenerator::fromArray([
-                    'body' => 'return '.$generator->generate().';',
-                ]);
-                $code = $file->generate();
+                $code = "<?php\n\nreturn ".$this->exportArray($trans).";\n";
 
                 //if the current text domain is a module, then save it there. If not, to the root.
                 if (key_exists($textDomain, $this->userModules)) {
@@ -483,6 +476,66 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 @chmod($fileToWrite, 0775);
             }
         }
+    }
+
+    /**
+     * Render a translation array as PHP source.
+     *
+     * This replaces Laminas\Code\Generator\ValueGenerator, which was the only
+     * reason this module referenced laminas-code — a package that is not in
+     * fact installed, so writePhpTranslationArrays() fatalled with "class not
+     * found" for anyone who reached it.
+     *
+     * The output format deliberately matches the committed *.lang.php files —
+     * short array syntax, four-space indent, and positional entries for
+     * integer keys that continue the sequence — so regenerating them produces
+     * no spurious diff.
+     *
+     * @param  array<array-key, mixed> $value
+     * @return string
+     */
+    protected function exportArray(array $value, $depth = 1)
+    {
+        if ([] === $value) {
+            return '[]';
+        }
+
+        $indent        = str_repeat('    ', $depth);
+        $expectedIndex = 0;
+        $lines         = [];
+
+        foreach ($value as $key => $item) {
+            if (is_int($key) && $key === $expectedIndex) {
+                $prefix = '';
+                $expectedIndex++;
+            } else {
+                $prefix = $this->exportValue($key, $depth).' => ';
+            }
+            $lines[] = $indent.$prefix.$this->exportValue($item, $depth).',';
+        }
+
+        return "[\n".implode("\n", $lines)."\n".str_repeat('    ', $depth - 1).']';
+    }
+
+    /**
+     * @param  mixed $value
+     * @return string
+     */
+    protected function exportValue($value, $depth)
+    {
+        if (is_array($value)) {
+            return $this->exportArray($value, $depth + 1);
+        }
+        if (null === $value) {
+            return 'null';
+        }
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        // var_export() single-quotes strings and escapes only \ and ', which is
+        // exactly what ValueGenerator emitted.
+        return var_export($value, true);
     }
 
     /**
