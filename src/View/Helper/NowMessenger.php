@@ -69,13 +69,6 @@ class NowMessenger extends AbstractTranslatorHelper
     protected $pluginFlashMessenger;
 
     /**
-     * Service locator
-     *
-     * @var ServiceLocatorInterface
-     */
-    protected $serviceLocator;
-
-    /**
      * Returns the flash messenger plugin controller
      *
      * @param  string|null $namespace
@@ -284,28 +277,6 @@ class NowMessenger extends AbstractTranslatorHelper
         }
 
         return $this->pluginFlashMessenger;
-    }
-
-    /**
-     * Set the service locator.
-     *
-     * @param  ServiceLocatorInterface $serviceLocator
-     * @return AbstractHelper
-     */
-    public function setServiceLocator(ServiceLocatorInterface $serviceLocator)
-    {
-        $this->serviceLocator = $serviceLocator;
-        return $this;
-    }
-
-    /**
-     * Get the service locator.
-     *
-     * @return ServiceLocatorInterface
-     */
-    public function getServiceLocator()
-    {
-        return $this->serviceLocator;
     }
 
     /**

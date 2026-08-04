@@ -20,9 +20,8 @@ class FlagFactory implements FactoryInterface
      */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
-        $parentLocator = $container->getServiceLocator();
         /** @var CountriesInfo $countries */
-        $countries = $parentLocator->get(CountriesInfo::class);
+        $countries = $container->get(CountriesInfo::class);
 		$obj = new Flag($countries);
 		return $obj;
     }

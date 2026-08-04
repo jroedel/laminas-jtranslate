@@ -23,12 +23,11 @@ class NowMessengerFactory implements FactoryInterface
      */
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
-        $serviceLocator = $container->getServiceLocator();
         $helper = new NowMessenger();
-        $controllerPluginManager = $serviceLocator->get('ControllerPluginManager');
+        $controllerPluginManager = $container->get('ControllerPluginManager');
         $flashMessenger = $controllerPluginManager->get('nowMessenger');
         $helper->setPluginNowMessenger($flashMessenger);
-//         $config = $serviceLocator->get('Config');
+//         $config = $container->get('Config');
 //         if (isset($config['view_helper_config']['flashmessenger'])) {
 //             $configHelper = $config['view_helper_config']['flashmessenger'];
 //             if (isset($configHelper['message_open_format'])) {
