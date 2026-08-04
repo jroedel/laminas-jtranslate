@@ -645,7 +645,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     public function getUserTable()
     {
         if (!$this->userTable) {
-            throw \Exception('User table not loaded into TranslationsTable');
+            throw new \Exception('User table not loaded into TranslationsTable');
         }
         return $this->userTable;
     }
@@ -683,7 +683,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
             $gateway = $this->phrasesGateway;
         }
         if (!isset($where) && !isset($sql)) {
-            throw \InvalidArgumentException('No query requested.');
+            throw new \InvalidArgumentException('No query requested.');
         }
         if (isset($sql))
         {

@@ -81,11 +81,18 @@ class CountriesInfo
     }
 
     /**
+     * Nullable by design: both callers pass a nullable `Country` column
+     * straight from the database and already guard the result with isset(),
+     * so null in means null out. Declaring that stops `strtoupper(null)` from
+     * raising a deprecation on every such row.
      *
-     * @param string $iso2  ISO 3166-1 alpha-2 code
+     * @param string|null $iso2 ISO 3166-1 alpha-2 code
      */
-    public function getCountry($iso2)
+    public function getCountry(?string $iso2)
     {
+        if (null === $iso2) {
+            return null;
+        }
         $iso2 = strtoupper($iso2);
         if (isset($this->countries[$iso2])) {
             return $this->countries[$iso2];
@@ -121,7 +128,7 @@ class CountriesInfo
             'it' => 'ita',
         );
         if (!isset($langMap[$language])) {
-            throw \Exception('Language not found');
+            throw new \Exception('Language not found');
         }
         $lang = $langMap[$language];
         $return = array();
