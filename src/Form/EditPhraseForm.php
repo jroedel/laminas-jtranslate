@@ -7,6 +7,18 @@ use Laminas\InputFilter\InputFilterProviderInterface;
 class EditPhraseForm extends Form implements InputFilterProviderInterface
 {
     /**
+     * Matches trans_translations.translation, varchar(2000) NOT NULL. MariaDB
+     * counts varchar length in characters and so does StringLength, so the two
+     * bounds are the same number and not an approximation.
+     */
+    const TRANSLATION_MAX_LENGTH = 2000;
+
+    /**
+     * Matches trans_phrases.phrase, varchar(2000) NOT NULL.
+     */
+    const PHRASE_MAX_LENGTH = 2000;
+
+    /**
      * 
      * @var array
      */
@@ -39,12 +51,14 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
 		$this->phrasesTableName = $phrasesTableName;
 		$this->translationsTableName = $translationsTableName;
 		
+		//Filters and validators belong in getInputFilterSpecification() below,
+		//not here: Laminas\Form\Factory::configureElement() reads only name,
+		//options and attributes from an element definition, so a 'filters' key
+		//written at this level is silently discarded. Every element in this form
+		//used to declare one that way and none of them ever ran.
 		$this->add(array(
 		    'name' => 'phraseId',
 		    'type' => 'Hidden',
-		    'filters' => array(
-		        array('name' => 'Int'),
-		    ),
 		));
 		$this->add(array(
 			'name' => 'phrase',
@@ -73,9 +87,6 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
     		$this->add(array(
     		    'name' => $key.'Id',
     		    'type' => 'Hidden',
-    		    'filters' => array(
-    		        array('name' => 'Int'),
-    		    ),
     		));
 		}
 		
@@ -111,33 +122,101 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
 	}
 	
 	/**
-	 * @todo Add validators for each of the pairs of elements of the different locales
-	 * (non-PHPdoc)
+	 * Every element of this form is specified here, on purpose.
+	 *
+	 * Laminas\Form\Form::attachInputFilterDefaults() builds an input per element
+	 * first and then lets this specification overwrite by name, so a field named
+	 * here gets *only* what this method says. The corollary is the reason each
+	 * locale field is listed: an element that is absent from this specification
+	 * and whose type does not implement InputProviderInterface — a plain
+	 * Textarea or Hidden, which is all of them below — is given
+	 * ['required' => false] and nothing else. No filter, no length bound, raw
+	 * input straight through. Only phraseId used to be specified here, so the
+	 * translation textareas accepted any string of any length and wrote it to
+	 * trans_translations.translation, a varchar(2000) NOT NULL, from where it is
+	 * rendered on every page of the site in that locale.
+	 *
 	 * @see \Laminas\InputFilter\InputFilterProviderInterface::getInputFilterSpecification()
 	 */
 	public function getInputFilterSpecification()
 	{
 	    if ($this->inputFilterSpecification) {
 	        return $this->inputFilterSpecification;
-	    } else {
-    		return $this->inputFilterSpecification = array(
-    			'phraseId' => array(
-    	            'validators' => array(
-    	                array(
-    	                    'name'    => 'Laminas\Validator\Db\RecordExists',
-    	                    'options' => array(
-    	                        'table' => $this->phrasesTableName,
-    	                        'field' => 'translation_phrase_id',
-    	                        'adapter' => \Laminas\Db\TableGateway\Feature\GlobalAdapterFeature::getStaticAdapter(),
-    	                        'messages' => array(
-    	                            \Laminas\Validator\Db\RecordExists::ERROR_NO_RECORD_FOUND => 'Phrase not found in database' 
-    	                        ),
-    	                    ),
-    	                ),
-    	            ),
-    			)
-    		);
 	    }
+
+	    $specification = array(
+			'phraseId' => array(
+			    'required' => true,
+			    'filters' => array(
+			        array('name' => 'Laminas\Filter\ToInt'),
+			    ),
+	            'validators' => array(
+	                array('name' => 'Laminas\Validator\Digits'),
+	                array(
+	                    'name'    => 'Laminas\Validator\Db\RecordExists',
+	                    'options' => array(
+	                        'table' => $this->phrasesTableName,
+	                        'field' => 'translation_phrase_id',
+	                        'adapter' => \Laminas\Db\TableGateway\Feature\GlobalAdapterFeature::getStaticAdapter(),
+	                        'messages' => array(
+	                            \Laminas\Validator\Db\RecordExists::ERROR_NO_RECORD_FOUND => 'Phrase not found in database'
+	                        ),
+	                    ),
+	                ),
+	            ),
+			),
+			//Read-only in the browser, which is a hint and not a control: the
+			//field is still posted and still has to be bounded. Nothing writes
+			//it back, so it is only checked, never trusted.
+			'phrase' => array(
+			    'required' => false,
+			    'allow_empty' => true,
+			    'filters' => array(
+			        array('name' => 'Laminas\Filter\StringTrim'),
+			    ),
+			    'validators' => array(
+			        array(
+			            'name' => 'Laminas\Validator\StringLength',
+			            'options' => array('max' => self::PHRASE_MAX_LENGTH),
+			        ),
+			    ),
+			),
+	    );
+
+	    foreach (array_keys($this->locales) as $key) {
+	        //An empty translation is how the editor says "leave this locale
+	        //alone" — TranslationsTable::updatePhrase() skips falsy values — so
+	        //empty is allowed and only the length is enforced.
+	        $specification[$key] = array(
+	            'required' => false,
+	            'allow_empty' => true,
+	            'filters' => array(
+	                array('name' => 'Laminas\Filter\StringTrim'),
+	            ),
+	            'validators' => array(
+	                array(
+	                    'name' => 'Laminas\Validator\StringLength',
+	                    'options' => array('max' => self::TRANSLATION_MAX_LENGTH),
+	                ),
+	            ),
+	        );
+	        //Kept validated although updatePhrase() no longer reads them for
+	        //anything: they are posted, so leaving them unspecified would leave
+	        //an unbounded field on the form for the next person to start
+	        //trusting again.
+	        $specification[$key . 'Id'] = array(
+	            'required' => false,
+	            'allow_empty' => true,
+	            'filters' => array(
+	                array('name' => 'Laminas\Filter\ToInt'),
+	            ),
+	            'validators' => array(
+	                array('name' => 'Laminas\Validator\Digits'),
+	            ),
+	        );
+	    }
+
+	    return $this->inputFilterSpecification = $specification;
 	}
 	
 // 	protected function getLocaleValidatorConfiguration()

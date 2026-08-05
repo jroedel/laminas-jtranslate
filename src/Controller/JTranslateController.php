@@ -92,7 +92,11 @@ class JTranslateController extends AbstractActionController
             }
             if ($form->isValid()) {
                 try {
-                    $table->updatePhrase ( $id, $data );
+                    //getData(), not $data: the raw post has been through no
+                    //filter at all, so passing it on discards the trimming and
+                    //length checks isValid() just performed and writes exactly
+                    //what the browser sent.
+                    $table->updatePhrase ( $id, $form->getData() );
                     //update the translation files
                     $table->writePhpTranslationArrays();
                     $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_SUCCESS )->addMessage ( 'Translations successfully updated.' );
@@ -131,10 +135,16 @@ class JTranslateController extends AbstractActionController
         
         //make sure our entity exists
         if (!$table->existsPhrase($id)) {
-            $this->getResponse()->setStatusCode(401);
             $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
             ->addMessage('The entity you\'re trying to delete doesn\'t exists.');
-            return $this->redirectAfterDelete(false);
+            //This branch used to call $this->redirectAfterDelete(false), which
+            //is not a method of this controller or of any of its parents, so
+            //asking to delete a phrase that no longer exists — a stale delete
+            //link, or a double submit — was an uncaught Error rather than the
+            //message above. The status code that was set here went with it: a
+            //redirect response replaces it, so it never reached the client
+            //even on the happy path this was modelled on.
+            return $this->redirect()->toRoute('jtranslate');
         }
         
         $form = new DeletePhraseForm();
