@@ -218,10 +218,30 @@ HAVING PhraseLocaleCount < ?";
         return $this->getTranslations()[$id];
     }
 
+    /**
+     * Write the submitted translations for one phrase.
+     *
+     * Only $data[$locale] — the translated text itself — is taken from the
+     * caller. Every identifier used to decide *which row* is written comes from
+     * $phrase, i.e. from the database, keyed by the $id the caller already had
+     * to be authorized for. That split is the whole security property of this
+     * method, and it is not cosmetic: this code previously put
+     * $data[$locale . 'Id'] straight into the UPDATE's WHERE clause, so a
+     * translator editing any one phrase could rewrite the translation of any
+     * other phrase in the table by editing a hidden field. The submitted
+     * *Id fields are now read only as a hint that a row exists, never as the
+     * row to write, and the same reasoning applies to translation_phrase_id on
+     * the INSERT branch, which took $data['phraseId'] for a value the caller
+     * was authorized for exactly once, in the controller, by loose comparison.
+     *
+     * @param int $id
+     * @param array $data
+     * @return array
+     */
     public function updatePhrase($id, $data)
     {
         $phrase = $this->getTranslations()[$id];
-        $dateString = date_format((new \DateTime(null, new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
+        $dateString = date_format((new \DateTime('now', new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
 
         $locales = array_keys($this->getLocales(true));
         $results = [];
@@ -230,7 +250,7 @@ HAVING PhraseLocaleCount < ?";
                 (isset($phrase[$key]) && $data[$key] === $phrase[$key])) { //in the case that they didn't write anything, continue
                 continue;
             }
-            if (isset($data[$key.'Id']) && $data[$key.'Id'] && $phrase[$key.'Id']) { //if we have a translation id for the locale
+            if (isset($phrase[$key.'Id']) && $phrase[$key.'Id']) { //this locale already has a row for this phrase
                 //update don't insert
                 $sql = new Sql($this->adapter);
                 $update = $sql->update($this->config['translations_table_name'])
@@ -239,7 +259,7 @@ HAVING PhraseLocaleCount < ?";
                         'modified_on' => $dateString,
                         'modified_by' => $this->getActingUserId(),
                     ])
-                    ->where(['translation_id' => $data[$key.'Id']]);
+                    ->where(['translation_id' => $phrase[$key.'Id']]);
                 $statement = $sql->prepareStatementForSqlObject($update);
                 $results[] = $statement->execute();
             } else {
@@ -247,7 +267,7 @@ HAVING PhraseLocaleCount < ?";
                 $sql = new Sql($this->adapter);
                 $insert = $sql->insert($this->config['translations_table_name'])
                 ->values([
-                    'translation_phrase_id' => $data['phraseId'],
+                    'translation_phrase_id' => $id,
                     'locale' => $key,
                     'translation' => $data[$key],
                     'modified_on' => $dateString,
