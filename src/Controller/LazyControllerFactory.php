@@ -1,4 +1,5 @@
 <?php
+
 namespace JTranslate\Controller;
 
 use Psr\Container\ContainerInterface;
@@ -8,10 +9,10 @@ class LazyControllerFactory implements AbstractFactoryInterface
 {
     public function canCreate(ContainerInterface $container, $requestedName)
     {
-        list( $module, ) = explode( '\\', __NAMESPACE__, 2 );
-        return strstr( $requestedName, $module . '\Controller') !== false;
+        list( $module, ) = explode('\\', __NAMESPACE__, 2);
+        return strstr($requestedName, $module . '\Controller') !== false;
     }
-    
+
     /**
      * These aliases work to substitute class names with SM types that are buried in ZF
      * @var array
@@ -21,7 +22,7 @@ class LazyControllerFactory implements AbstractFactoryInterface
         'Laminas\Validator\ValidatorPluginManager' => 'ValidatorManager',
         'Laminas\Mvc\I18n\Translator' => 'translator',
     ];
-    
+
     /**
      * Create an object
      *
@@ -37,39 +38,33 @@ class LazyControllerFactory implements AbstractFactoryInterface
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
         $class = new \ReflectionClass($requestedName);
-        if( $constructor = $class->getConstructor() )
-        {
-            if( $params = $constructor->getParameters() )
-            {
+        if ($constructor = $class->getConstructor()) {
+            if ($params = $constructor->getParameters()) {
                 $parameter_instances = [];
-                foreach( $params as $p )
-                {
-                    
-                    if( $p->getClass() ) {
+                foreach ($params as $p) {
+                    if ($p->getClass()) {
                         $cn = $p->getClass()->getName();
                         if (array_key_exists($cn, $this->aliases)) {
                             $cn = $this->aliases[$cn];
                         }
-                        
+
                         try {
                             $parameter_instances[] = $container->get($cn);
-                        }
-                        catch (\Exception $x) {
+                        } catch (\Exception $x) {
                             echo __CLASS__
                             . " couldn't create an instance of $cn to satisfy the constructor for $requestedName.";
                             exit;
                         }
-                    }
-                    else{
-                        if( $p->isArray() && $p->getName() == 'config' )
+                    } else {
+                        if ($p->isArray() && $p->getName() == 'config') {
                             $parameter_instances[] = $container->get('config');
+                        }
                     }
-                    
                 }
                 return $class->newInstanceArgs($parameter_instances);
             }
         }
-        
-        return new $requestedName;
+
+        return new $requestedName();
     }
 }

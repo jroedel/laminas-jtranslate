@@ -1,4 +1,5 @@
 <?php
+
 namespace JTranslate\View\Helper\Service;
 
 use Laminas\ServiceManager\Factory\FactoryInterface;
@@ -22,7 +23,7 @@ class FlagFactory implements FactoryInterface
     {
         /** @var CountriesInfo $countries */
         $countries = $container->get(CountriesInfo::class);
-		$obj = new Flag($countries);
-		return $obj;
+        $obj = new Flag($countries);
+        return $obj;
     }
 }
