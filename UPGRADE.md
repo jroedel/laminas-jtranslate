@@ -112,6 +112,35 @@ change** — generally from English to the correct language. The contract caller
 rely on is unchanged: an unrecognised code renders as an empty string, never as
 the raw code.
 
+### 7. The compiled catalogs are no longer shipped, and the schema file is gone
+
+`language/*.lang.php` and `config/database.sql.dist` are both deleted.
+
+The catalogs were build artifacts stored among sources, and stale ones — 9 phrases
+against the 26 in the database — because nothing could regenerate them except a human
+saving a phrase in the GUI. `bin/console jtranslate:export-catalogs` rebuilds them
+now, and `language/` is gitignored so they cannot drift back in.
+
+`config/database.sql.dist` had a trailing comma after `origin_route`, so
+`CREATE TABLE trans_phrases` was a syntax error and it had never been runnable as
+written. Migration 001 replaces it.
+
+**What to do on an existing installation:**
+
+```
+bin/console jtranslate:migrate --mark-applied=001-create-phrase-tables   # you have the tables
+bin/console jtranslate:migrate                                          # applies 002, the seed
+bin/console jtranslate:export-catalogs                                  # as the web server user
+```
+
+The seed is idempotent per phrase *and* per locale, so it fills in what your database
+lacks and never overwrites a translation somebody has improved. On the database this
+was developed against it added 14 phrases and touched none of the 10 already there.
+
+If your database user lacks DDL rights — which is the normal arrangement — use
+`--pretend` to get the SQL, have it run by an account that has them, then
+`--mark-applied`.
+
 ### Also in 2.0, not breaking
 
 - `writePhpTranslationArrays()` writes atomically and **raises on failure**

@@ -127,10 +127,19 @@ class JTranslateController extends AbstractActionController
                     $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_SUCCESS)
                         ->addMessage('Translations successfully updated.');
                 } catch (\Exception $e) {
+                    //The exception text is logged, not flashed. Flash messages are run
+                    //through the translator when they render, so a message carrying
+                    //$e->getMessage() would report itself as a *missing translation*
+                    //and be written to the phrase table — a new, permanent phrase row
+                    //for every distinct filesystem error, each one unique and none of
+                    //them translatable. The message a translator sees has to be a
+                    //fixed sentence for the same reason every other one here is.
+                    error_log('JTranslate: could not compile translation files after an '
+                        . 'edit: ' . $e->getMessage());
                     $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
                         ->addMessage('The translation was saved to the database, but the compiled translation '
                         . 'files could not be written, so the site will keep showing the old text '
-                        . 'until that is fixed. ' . $e->getMessage());
+                        . 'until that is fixed.');
                 }
                 return $this->redirect()->toUrl($this->url()->fromRoute('jtranslate'));
             } else {

@@ -1,0 +1,118 @@
+<?php
+
+declare(strict_types=1);
+
+namespace JTranslate\Migration;
+
+use Laminas\Db\Adapter\AdapterInterface;
+
+use function sprintf;
+
+/**
+ * Creates the two tables the library reads and writes.
+ *
+ * This replaces `config/database.sql.dist`, which was a copy of a phpMyAdmin export
+ * and had never been runnable: it carried a trailing comma after `origin_route`, so
+ * `CREATE TABLE trans_phrases` was a syntax error. Anybody who followed the old
+ * install instructions got an error and fixed it by hand, which is a poor way to
+ * find out.
+ *
+ * ## Two deliberate differences from the databases already in production
+ *
+ * Both existing installations were created before this migration existed, so they
+ * are not changed by it, and both differ from what a fresh install now gets. The
+ * divergence is intentional and worth stating rather than hiding:
+ *
+ * - **`utf8mb4`, not `utf8mb3`.** The live tables are `utf8mb3_general_ci`, a
+ *   charset MySQL has deprecated and which cannot represent anything outside the
+ *   BMP. Propagating it into every future installation to preserve uniformity would
+ *   be choosing the wrong default forever. Nothing in the library depends on the
+ *   charset: phrase hashing happens in PHP, and the only index on a text column is
+ *   `(translation_phrase_id, locale)`, whose key length under utf8mb4 is 84 bytes
+ *   against a 3072-byte limit.
+ * - **`modified_by` is an unsigned int, not `varchar(70)`.** The code has always
+ *   written an integer user id here and read it back with an `(int)` cast; the live
+ *   column is a string that MySQL coerces on every write. A new install should not
+ *   inherit that.
+ *
+ * Aligning the existing databases is a separate, deliberate operation — converting
+ * the charset of a live table with ~12,900 translation rows is somebody's decision
+ * to schedule, not a side effect of installing a library version.
+ *
+ * ## Why IF NOT EXISTS
+ *
+ * So that an installation which already has these tables — which is every existing
+ * one — can record this migration as applied without a failure. The runner marks it
+ * applied either way; the guard is what makes that honest rather than a lie.
+ */
+final class M001CreatePhraseTables implements MigrationInterface
+{
+    public function name(): string
+    {
+        return '001-create-phrase-tables';
+    }
+
+    public function describe(): string
+    {
+        return 'Create the phrases and translations tables';
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return list<array{sql: string, parameters: list<mixed>}>
+     */
+    public function statements(AdapterInterface $db, array $config): array
+    {
+        $phrases      = (string) ($config['phrases_table_name'] ?? 'trans_phrases');
+        $translations = (string) ($config['translations_table_name'] ?? 'trans_translations');
+
+        return [
+            [
+                'sql'        => sprintf(
+                    <<<'SQL'
+                    CREATE TABLE IF NOT EXISTS `%s` (
+                      `translation_phrase_id` INT(11) NOT NULL AUTO_INCREMENT,
+                      `project` VARCHAR(50) NOT NULL,
+                      `text_domain` VARCHAR(50) NOT NULL,
+                      `phrase` VARCHAR(2000) NOT NULL,
+                      `added_on` DATETIME NOT NULL,
+                      `origin_route` VARCHAR(255) NULL DEFAULT NULL,
+                      PRIMARY KEY (`translation_phrase_id`),
+                      KEY `project_text_domain` (`project`, `text_domain`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    SQL,
+                    $phrases
+                ),
+                'parameters' => [],
+            ],
+            [
+                //(project, text_domain) is indexed because every read the library
+                //performs filters on project, and the phrase index additionally
+                //groups by text domain. The live tables have no such index; adding
+                //one there is a separate migration nobody has needed yet.
+                'sql'        => sprintf(
+                    <<<'SQL'
+                    CREATE TABLE IF NOT EXISTS `%s` (
+                      `translation_id` INT(11) NOT NULL AUTO_INCREMENT,
+                      `translation_phrase_id` INT(11) NOT NULL,
+                      `locale` VARCHAR(20) NOT NULL,
+                      `translation` VARCHAR(2000) NOT NULL,
+                      `modified_by` INT(10) UNSIGNED NULL DEFAULT NULL,
+                      `modified_on` DATETIME NOT NULL,
+                      PRIMARY KEY (`translation_id`),
+                      UNIQUE KEY `translation_phrase_id` (`translation_phrase_id`, `locale`),
+                      CONSTRAINT `%s_phrase_fk`
+                        FOREIGN KEY (`translation_phrase_id`)
+                        REFERENCES `%s` (`translation_phrase_id`)
+                        ON DELETE CASCADE ON UPDATE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    SQL,
+                    $translations,
+                    $translations,
+                    $phrases
+                ),
+                'parameters' => [],
+            ],
+        ];
+    }
+}
