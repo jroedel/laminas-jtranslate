@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Zend Framework (http://framework.zend.com/)
  *
@@ -26,15 +27,14 @@ class NowMessenger extends AbstractTranslatorHelper
      *
      * @var array
      */
-    protected $classMessages = array(
-        PluginNowMessenger::NAMESPACE_INFO => array('alert', 'alert-dismissable', 'alert-info'),
-        PluginNowMessenger::NAMESPACE_ERROR => array('alert', 'alert-dismissable', 'alert-danger'),
-        PluginNowMessenger::NAMESPACE_SUCCESS => array('alert', 'alert-dismissable', 'alert-success'),
-        PluginNowMessenger::NAMESPACE_DEFAULT => array('alert', 'alert-dismissable', 'alert-default'),
-        PluginNowMessenger::NAMESPACE_WARNING => array('alert', 'alert-dismissable', 'alert-warning'),
-    );
-
-    /**
+    protected $classMessages = [
+        PluginNowMessenger::NAMESPACE_INFO => ['alert', 'alert-dismissable', 'alert-info'],
+        PluginNowMessenger::NAMESPACE_ERROR => ['alert', 'alert-dismissable', 'alert-danger'],
+        PluginNowMessenger::NAMESPACE_SUCCESS => ['alert', 'alert-dismissable', 'alert-success'],
+        PluginNowMessenger::NAMESPACE_DEFAULT => ['alert', 'alert-dismissable', 'alert-default'],
+        PluginNowMessenger::NAMESPACE_WARNING => ['alert', 'alert-dismissable', 'alert-warning'],
+    ];
+/**
      * Templates for the open/close/separators for message tags
      *
      * @var string
@@ -46,29 +46,25 @@ class NowMessenger extends AbstractTranslatorHelper
      </button>
      ';
     protected $messageSeparatorString = '</br>';
-
-    /**
+/**
      * Flag whether to escape messages
      *
      * @var bool
      */
     protected $autoEscape = true;
-
-    /**
+/**
      * Html escape helper
      *
      * @var EscapeHtml
      */
     protected $escapeHtmlHelper;
-
-    /**
+/**
      * Flash messenger plugin
      *
      * @var FlashMessenger
      */
     protected $pluginFlashMessenger;
-
-    /**
+/**
      * Returns the flash messenger plugin controller
      *
      * @param  string|null $namespace
@@ -78,13 +74,25 @@ class NowMessenger extends AbstractTranslatorHelper
     {
         $nowMessenger = $this->getPluginNowMessenger();
         $markup = '';
-        $markup.= $this->renderMessages(PluginNowMessenger::NAMESPACE_ERROR, $nowMessenger->getMessages(PluginNowMessenger::NAMESPACE_ERROR));
-        $markup.= $this->renderMessages(PluginNowMessenger::NAMESPACE_WARNING, $nowMessenger->getMessages(PluginNowMessenger::NAMESPACE_WARNING));
-        $markup.= $this->renderMessages(PluginNowMessenger::NAMESPACE_INFO, $nowMessenger->getMessages(PluginNowMessenger::NAMESPACE_INFO));
-        $markup.= $this->renderMessages(PluginNowMessenger::NAMESPACE_SUCCESS, $nowMessenger->getMessages(PluginNowMessenger::NAMESPACE_SUCCESS));
+        $markup .= $this->renderMessages(
+            PluginNowMessenger::NAMESPACE_ERROR,
+            $nowMessenger->getMessages(PluginNowMessenger::NAMESPACE_ERROR)
+        );
+        $markup .= $this->renderMessages(
+            PluginNowMessenger::NAMESPACE_WARNING,
+            $nowMessenger->getMessages(PluginNowMessenger::NAMESPACE_WARNING)
+        );
+        $markup .= $this->renderMessages(
+            PluginNowMessenger::NAMESPACE_INFO,
+            $nowMessenger->getMessages(PluginNowMessenger::NAMESPACE_INFO)
+        );
+        $markup .= $this->renderMessages(
+            PluginNowMessenger::NAMESPACE_SUCCESS,
+            $nowMessenger->getMessages(PluginNowMessenger::NAMESPACE_SUCCESS)
+        );
         return $markup;
     }
-    
+
     /**
      * Proxy the flash messenger plugin controller
      *
@@ -95,9 +103,9 @@ class NowMessenger extends AbstractTranslatorHelper
     public function __call($method, $argv)
     {
         $flashMessenger = $this->getPluginNowMessenger();
-        return call_user_func_array(array($flashMessenger, $method), $argv);
+        return call_user_func_array([$flashMessenger, $method], $argv);
     }
-    
+
     /**
      * Render Messages
      *
@@ -107,12 +115,8 @@ class NowMessenger extends AbstractTranslatorHelper
      * @param bool|null $autoEscape
      * @return string
      */
-    protected function renderMessages(
-        $namespace,
-        array $messages = array(),
-        array $classes = array(),
-        $autoEscape = null
-    ) {
+    protected function renderMessages($namespace, array $messages = [], array $classes = [], $autoEscape = null)
+    {
         // Prepare classes for opening tag
         if (empty($classes)) {
             if (isset($this->classMessages[$namespace])) {
@@ -129,27 +133,23 @@ class NowMessenger extends AbstractTranslatorHelper
 
         // Flatten message array
         $escapeHtml      = $this->getEscapeHtmlHelper();
-        $messagesToPrint = array();
+        $messagesToPrint = [];
         $translator = $this->getTranslator();
         $translatorTextDomain = $this->getTranslatorTextDomain();
-        array_walk_recursive(
-            $messages,
-            function ($item) use (& $messagesToPrint, $escapeHtml, $autoEscape, $translator, $translatorTextDomain) {
-                if ($translator !== null) {
-                    $item = $translator->translate(
-                        $item,
-                        $translatorTextDomain
-                    );
-                }
+        $walk = function ($item) use (&$messagesToPrint, $escapeHtml, $autoEscape, $translator, $translatorTextDomain) {
 
-                if ($autoEscape) {
-                    $messagesToPrint[] = $escapeHtml($item);
-                    return;
-                }
-
-                $messagesToPrint[] = $item;
+            if ($translator !== null) {
+                $item = $translator->translate($item, $translatorTextDomain);
             }
-        );
+
+            if ($autoEscape) {
+                $messagesToPrint[] = $escapeHtml($item);
+                return;
+            }
+
+            $messagesToPrint[] = $item;
+        };
+        array_walk_recursive($messages, $walk);
 
         if (empty($messagesToPrint)) {
             return '';
@@ -157,10 +157,8 @@ class NowMessenger extends AbstractTranslatorHelper
 
         // Generate markup
         $markup  = sprintf($this->getMessageOpenFormat(), ' class="' . implode(' ', $classes) . '"');
-        $markup .= implode(
-            sprintf($this->getMessageSeparatorString(), ' class="' . implode(' ', $classes) . '"'),
-            $messagesToPrint
-        );
+        $separator = sprintf($this->getMessageSeparatorString(), ' class="' . implode(' ', $classes) . '"');
+        $markup   .= implode($separator, $messagesToPrint);
         $markup .= $this->getMessageCloseString();
         return $markup;
     }
@@ -273,7 +271,7 @@ class NowMessenger extends AbstractTranslatorHelper
     public function getPluginNowMessenger()
     {
         if (null === $this->pluginFlashMessenger) {
-            //was setPluginFlashMessenger(), a method this class never had, so
+//was setPluginFlashMessenger(), a method this class never had, so
             //this lazy-init branch could only ever raise "undefined method"
             $this->setPluginNowMessenger(new PluginNowMessenger());
         }
@@ -296,7 +294,7 @@ class NowMessenger extends AbstractTranslatorHelper
             $this->escapeHtmlHelper = $this->view->plugin('escapehtml');
         }
 
-        if (!$this->escapeHtmlHelper instanceof EscapeHtml) {
+        if (! $this->escapeHtmlHelper instanceof EscapeHtml) {
             $this->escapeHtmlHelper = new EscapeHtml();
         }
 

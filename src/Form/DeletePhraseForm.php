@@ -1,4 +1,5 @@
 <?php
+
 namespace JTranslate\Form;
 
 use Laminas\Form\Form;

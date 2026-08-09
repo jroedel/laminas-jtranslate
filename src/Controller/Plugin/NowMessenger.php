@@ -9,40 +9,40 @@ class NowMessenger extends AbstractPlugin
     /**
      * Default messages namespace
      */
-    const NAMESPACE_DEFAULT = 'default';
+    public const NAMESPACE_DEFAULT = 'default';
 
     /**
      * Success messages namespace
      */
-    const NAMESPACE_SUCCESS = 'success';
+    public const NAMESPACE_SUCCESS = 'success';
 
     /**
      * Warning messages namespace
      */
-    const NAMESPACE_WARNING = 'warning';
+    public const NAMESPACE_WARNING = 'warning';
 
     /**
      * Error messages namespace
      */
-    const NAMESPACE_ERROR = 'error';
+    public const NAMESPACE_ERROR = 'error';
 
     /**
      * Info messages namespace
      */
-    const NAMESPACE_INFO = 'info';
-    
-    protected $messages = array();
-    
+    public const NAMESPACE_INFO = 'info';
+
+    protected $messages = [];
+
     /**
      * Instance namespace, default is 'default'
      *
      * @var string
      */
     protected $namespace = self::NAMESPACE_DEFAULT;
-    
+
     public function __construct()
     {
-        $this->messages = array();
+        $this->messages = [];
     }
 
     /**
@@ -56,10 +56,10 @@ class NowMessenger extends AbstractPlugin
     public function setNamespace($namespace = 'default')
     {
         $this->namespace = $namespace;
-    
+
         return $this;
     }
-    
+
     /**
      * Get the message namespace
      *
@@ -69,7 +69,7 @@ class NowMessenger extends AbstractPlugin
     {
         return $this->namespace;
     }
-    
+
     /**
      * Add a message
      *
@@ -83,16 +83,17 @@ class NowMessenger extends AbstractPlugin
         if (is_null($namespace)) {
             $namespace = $this->namespace;
         }
-        $this->messages[] = array('message' => $message, 'namespace' => $namespace);
+        $this->messages[] = ['message' => $message, 'namespace' => $namespace];
         return $this;
     }
-    
+
     /**
      * Return the messages pending render
      * @return array
      */
-    public function getMessages($namespace = self::NAMESPACE_DEFAULT) {
-        $return = array();
+    public function getMessages($namespace = self::NAMESPACE_DEFAULT)
+    {
+        $return = [];
         foreach ($this->messages as $message) {
             if ($message['namespace'] == $namespace) {
                 $return[] = $message['message'];

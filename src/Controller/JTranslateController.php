@@ -1,4 +1,5 @@
 <?php
+
 namespace JTranslate\Controller;
 
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -19,18 +20,16 @@ class JTranslateController extends AbstractActionController
      * @var TranslationsTable $translationsTable
      */
     protected $translationsTable;
-    
-    /**
+/**
      * @var EditPhraseForm $editPhraseForm
      */
     protected $editPhraseForm;
-    
     public function __construct(TranslationsTable $translationsTable, EditPhraseForm $editPhraseForm)
     {
         $this->translationsTable = $translationsTable;
         $this->editPhraseForm = $editPhraseForm;
     }
-    
+
     public function indexAction()
     {
         /** @var \JTranslate\Model\TranslationsTable $table */
@@ -59,30 +58,34 @@ class JTranslateController extends AbstractActionController
         ]);
     }
 
-    public function editAction() {
+    public function editAction()
+    {
         /** @var TranslationsTable $table **/
         $table = $this->translationsTable;
-        $id = ( int ) $this->params ()->fromRoute ( 'phrase_id' );
+        $id = (int) $this->params()->fromRoute('phrase_id');
         if (! $id) {
-            $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Phrase not found.' );
-            return $this->redirect ()->toRoute ( 'jtranslate', array (
+            $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
+                ->addMessage('Phrase not found.');
+            return $this->redirect()->toRoute('jtranslate', [
                 'action' => 'index'
-            ) );
+            ]);
         }
-        $phrase = $table->getPhrase ( $id );
+        $phrase = $table->getPhrase($id);
         if (! $phrase) {
-            $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Phrase not found.' );
-            return $this->redirect ()->toRoute ( 'jtranslate' );
+            $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
+                ->addMessage('Phrase not found.');
+            return $this->redirect()->toRoute('jtranslate');
         }
         $locales = $table->getLocales(true);
         $form = $this->editPhraseForm;
-        
-        $request = $this->getRequest ();
-        if ($request->isPost ()) {
-            $data = $request->getPost ()->toArray ();
+        $request = $this->getRequest();
+        if ($request->isPost()) {
+            $data = $request->getPost()->toArray();
             $form->setData($data);
-            if ($data ['phraseId'] != $id) { // make sure the user is trying to update the right phrase
-                $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Error in form submission, please review.' );
+            if ($data ['phraseId'] != $id) {
+        // make sure the user is trying to update the right phrase
+                $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
+                    ->addMessage('Error in form submission, please review.');
                 return [
                     'phrase' => $phrase,
                     'phraseId' => $id,
@@ -92,13 +95,14 @@ class JTranslateController extends AbstractActionController
             }
             if ($form->isValid()) {
                 try {
-                    //getData(), not $data: the raw post has been through no
+                //getData(), not $data: the raw post has been through no
                     //filter at all, so passing it on discards the trimming and
                     //length checks isValid() just performed and writes exactly
                     //what the browser sent.
-                    $table->updatePhrase ( $id, $form->getData() );
+                    $table->updatePhrase($id, $form->getData());
                 } catch (\Exception $e) {
-                    $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Error in form submission, please review.' );
+                    $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
+                        ->addMessage('Error in form submission, please review.');
                     $form->setAttribute('action', $this->getRequest()->getRequestUri());
                     return new ViewModel([
                         'phrase' => $phrase,
@@ -120,17 +124,18 @@ class JTranslateController extends AbstractActionController
                 //truth. Both were wrong in the same direction.
                 try {
                     $table->writePhpTranslationArrays();
-                    $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_SUCCESS )->addMessage ( 'Translations successfully updated.' );
+                    $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_SUCCESS)
+                        ->addMessage('Translations successfully updated.');
                 } catch (\Exception $e) {
-                    $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage (
-                        'The translation was saved to the database, but the compiled translation '
+                    $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
+                        ->addMessage('The translation was saved to the database, but the compiled translation '
                         . 'files could not be written, so the site will keep showing the old text '
-                        . 'until that is fixed. ' . $e->getMessage()
-                    );
+                        . 'until that is fixed. ' . $e->getMessage());
                 }
-                return $this->redirect ()->toUrl ( $this->url ()->fromRoute ( 'jtranslate' ) );
+                return $this->redirect()->toUrl($this->url()->fromRoute('jtranslate'));
             } else {
-                $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Error in form submission, please review.' );
+                $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
+                    ->addMessage('Error in form submission, please review.');
             }
         } else {
             $form->setData($phrase);
@@ -143,7 +148,7 @@ class JTranslateController extends AbstractActionController
             'locales' => $locales
         ]);
     }
-    
+
     /**
      * If the form has been posted, confirm the CSRF. If all is well, delete the entity.
      * If the request is a GET, ask the user to confirm the deletion
@@ -152,17 +157,14 @@ class JTranslateController extends AbstractActionController
     public function deleteAction()
     {
         $id = $this->params()->fromRoute('phrase_id');
-        
         $request = $this->getRequest();
-        
-        /** @var TranslationsTable $table **/
+/** @var TranslationsTable $table **/
         $table = $this->translationsTable;
-        
-        //make sure our entity exists
-        if (!$table->existsPhrase($id)) {
+//make sure our entity exists
+        if (! $table->existsPhrase($id)) {
             $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
             ->addMessage('The entity you\'re trying to delete doesn\'t exists.');
-            //This branch used to call $this->redirectAfterDelete(false), which
+//This branch used to call $this->redirectAfterDelete(false), which
             //is not a method of this controller or of any of its parents, so
             //asking to delete a phrase that no longer exists — a stale delete
             //link, or a double submit — was an uncaught Error rather than the
@@ -171,7 +173,7 @@ class JTranslateController extends AbstractActionController
             //even on the happy path this was modelled on.
             return $this->redirect()->toRoute('jtranslate');
         }
-        
+
         $form = new DeletePhraseForm();
         if ($request->isPost()) {
             $data = $request->getPost();
@@ -180,17 +182,18 @@ class JTranslateController extends AbstractActionController
                 $table->deletePhrase($id);
                 $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_SUCCESS)
                 ->addMessage('Entity successfully deleted.');
-                return $this->redirect ()->toUrl ( $this->url ()->fromRoute ( 'jtranslate' ) );
+                return $this->redirect()->toUrl($this->url()->fromRoute('jtranslate'));
             } else {
-                $this->nowMessenger()->setNamespace(NowMessenger::NAMESPACE_ERROR)->addMessage('Error in form submission, please review.');
-                $this->getResponse()->setStatusCode(401); //exists, but either didn't match params or bad csrf
+                $this->nowMessenger()->setNamespace(NowMessenger::NAMESPACE_ERROR)
+                    ->addMessage('Error in form submission, please review.');
+                $this->getResponse()->setStatusCode(401);
+    //exists, but either didn't match params or bad csrf
             }
         }
-        
+
         //set the form action url
         $form->setAttribute('action', $this->getRequest()->getRequestUri());
         $entityObject = $table->getPhrase($id);
-        
         $view = new ViewModel([
             'form' => $form,
             'entity' => 'translation-phrase',

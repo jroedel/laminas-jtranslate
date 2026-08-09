@@ -1,4 +1,5 @@
 <?php
+
 namespace JTranslate\Service;
 
 use Laminas\ServiceManager\Factory\FactoryInterface;
@@ -22,7 +23,7 @@ class CountriesFactory implements FactoryInterface
     {
         //data vendored from mledoze/countries, see module/JTranslate/data/countries.README.txt
         $countries = Json::decode(file_get_contents(__DIR__ . '/../../data/countries.json'));
-		$obj = new CountriesInfo($countries);
-		return $obj;
+        $obj = new CountriesInfo($countries);
+        return $obj;
     }
 }
