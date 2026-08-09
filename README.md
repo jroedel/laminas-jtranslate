@@ -61,10 +61,54 @@ imports — nothing aspirational.
 1. `composer require jroedel/laminas-jtranslate`
 2. Copy `config/jtranslate.global.php.dist` into your application's config
    directory and set at least `project_name`.
-3. Create the two tables from `config/database.sql.dist`.
-4. Add `JTranslate` to `modules.config.php`.
-5. Restrict the `jtranslate` route and its children to administrators. The GUI
+3. Add `JTranslate` to `modules.config.php`.
+4. Create the schema and pre-feed the GUI's own translations:
+   `bin/console jtranslate:migrate`
+5. Render the catalogs: `bin/console jtranslate:export-catalogs`
+6. Restrict the `jtranslate` route and its children to administrators. The GUI
    writes to the phrase table and to the filesystem; it is not a public page.
+
+Step 4 needs DDL rights, which a web application's database user often deliberately
+lacks. `jtranslate:migrate --pretend` prints the SQL instead of running it, for
+somebody holding an account that does; afterwards
+`jtranslate:migrate --mark-applied=001-create-phrase-tables` records it. On an
+installation that already has the tables, `--mark-applied` *is* step 4.
+
+`config/database.sql.dist` is gone. It was a phpMyAdmin export carrying a trailing
+comma after `origin_route`, so it had never been runnable; migration 001 replaces it.
+
+## Commands
+
+| command | what it does |
+| --- | --- |
+| `jtranslate:migrate` | apply pending migrations. `--status` reports; `--pretend` prints the SQL and changes nothing; `--mark-applied=NAME` records one as applied without running it |
+| `jtranslate:export-catalogs` | rebuild every compiled `*.lang.php` from the database. `--domain=NAME` restricts it, `--dry-run` lists what it would write |
+
+Run `jtranslate:export-catalogs` **as the user the web server runs as**, not as root.
+Running it as root creates catalogs the web server cannot subsequently replace, which
+is the ownership tangle that made this library look like it had a permissions bug.
+
+## The compiled catalogs are not in this repository
+
+They used to be: four `language/*.lang.php` files, checked in. They were build
+artifacts stored among sources, and they had drifted badly — 9 phrases against the 26
+in the database — because until 2.0 nothing could regenerate them except a human
+saving a phrase in the GUI. They are gitignored now and produced by
+`jtranslate:export-catalogs`.
+
+What was genuinely this library's own data moved to `data/ui-phrases.php`: the phrases
+its GUI displays, with the translations it shipped. Migration 002 inserts them for
+your `project_name`, idempotently per phrase *and* per locale, so it fills gaps and
+never overwrites a translation somebody has improved.
+
+**`data/ui-phrases.php` may only contain strings this repository itself emits.**
+`trans_phrases` is shared between the applications using this library, so a phrase in
+it belongs to whichever project contributed it and may be anything at all — including
+data that must not leave that project. Seeding from a database would exfiltrate one
+consumer's content into every installation of the library.
+`tools/verify-seed-provenance.php` enforces the rule: it collects every string literal
+in `src/` and `view/` with PHP's tokenizer and requires each seeded phrase to match
+one. Run it whenever you touch the seed.
 
 ## Configuration
 
@@ -168,7 +212,7 @@ so nobody builds anything new on it.
 
 | what | why |
 | --- | --- |
-| Catalogs written into the source tree (`module/*/language/`, `language/`) | These are **build artifacts stored among sources**. They are inconsistently versioned — some tracked in git and therefore overwritten by every deploy, some gitignored and therefore unbackupable — and there is no command that regenerates them, so the only way to rebuild is for a human to click Save on a phrase. 3.0 moves them to a cache directory and adds a console command. This is also the real fix for the permissions complaints: nothing the web server must write should live in deployed source. |
+| Catalogs written into the source tree (`module/*/language/`, `language/`) | Still written among sources, though no longer *committed* here, and `jtranslate:export-catalogs` can rebuild them now. What remains for 3.0 is moving the write target out of deployed source entirely, into a cache directory — the real fix for the permissions complaints, since nothing the web server must write should live where a deploy also writes. |
 | The admin GUI (`JTranslateController`, both forms, three `.phtml`) | ~480 lines built on `AbstractActionController`, laminas-form and `FlashMessenger`. It is the last part that requires laminas-mvc, and it is the part most worth rewriting rather than porting. |
 | `Module::onBootstrap()`'s per-controller text-domain listener | Sets the text domain from the controller's root namespace on every dispatch, eagerly instantiating twelve view helpers to do it. Under a framework where the domain is an argument to `trans()`, this disappears. |
 | `getTranslations()` loading the full user directory | It fetches every user to populate one attribution column, for every caller including those that never display it. |
@@ -181,15 +225,17 @@ all mechanical.
 ## Development
 
 ```
-vendor/bin/phpcs        # PSR-12 plus house sniffs; exits 0
+vendor/bin/phpcs                       # PSR-12 plus house sniffs; exits 0
+php tools/verify-seed-provenance.php   # the seed holds only our own strings
 ```
 
 The ruleset checks `src` and `config`. `language/` is excluded because those are
 compiled catalogs whose line length is the length of a translated phrase — a
 line-length rule there could never be satisfied and would fail on the next export.
 
-This repository has no test suite of its own; it is verified from the applications
-that consume it. That is a gap, and closing it belongs with 3.0.
+This repository has no PHPUnit suite of its own; it is verified from the applications
+that consume it, plus the provenance tool above. That is a gap, and closing it belongs
+with 3.0.
 
 ## License
 

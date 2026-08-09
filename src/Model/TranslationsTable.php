@@ -565,6 +565,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     /**
      * Queries the database for the latest translations and rewrites all the files.
      *
+     * @param string[]|null $onlyTextDomains restrict to these text domains; null means all
      * @return string[] the absolute paths written, in write order
      * @throws \RuntimeException if any directory or file could not be written. The
      *         caller decides what that means: the admin action reports it to the
@@ -572,11 +573,18 @@ ORDER BY `locale`, `text_domain`, `phrase`";
      *         never happen again is the third option this method used to take, which
      *         was to discard every return value and report success regardless.
      */
-    public function writePhpTranslationArrays()
+    public function writePhpTranslationArrays(?array $onlyTextDomains = null)
     {
         $translations = $this->getTranslatedText();
         $written = [];
         foreach ($translations as $textDomain => $localeTrans) {
+            //Restricting to named domains is what makes this usable on a tree where
+            //some target directories are not writable — a real state, since the
+            //non-module domains live under a directory a deploy may own. Without it,
+            //one unwritable domain stops every later domain from being rebuilt.
+            if (null !== $onlyTextDomains && ! in_array($textDomain, $onlyTextDomains, true)) {
+                continue;
+            }
             //a text domain that names a loaded module keeps its export inside that
             //module; every other domain goes to a subfolder of the project's own
             //language/ directory. The old code also tried to mkdir the *module*

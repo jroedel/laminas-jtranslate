@@ -138,6 +138,19 @@ return [
             'languageName'          => View\Helper\LanguageName::class,
         ],
     ],
+    /**
+     * Registered lazily by service id, so declaring them costs nothing until one is
+     * the command being run. See src/Console/Command for what each is for; the short
+     * version is that jtranslate:migrate brings the schema and the GUI's own phrases
+     * up to date, and jtranslate:export-catalogs renders them to disk — which is what
+     * makes the compiled catalogs a derived artifact rather than something checked in.
+     */
+    'console' => [
+        'commands' => [
+            'jtranslate:migrate'          => Console\Command\MigrateCommand::class,
+            'jtranslate:export-catalogs'  => Console\Command\ExportCatalogsCommand::class,
+        ],
+    ],
     'service_manager' => [
         'factories' => [
             Cache\PhraseCache::class    => Service\PhraseCacheFactory::class,
@@ -145,6 +158,11 @@ return [
             Model\TranslationsTable::class    => Service\TranslationsTableFactory::class,
             Form\EditPhraseForm::class       => Service\EditPhraseFormFactory::class,
             Model\CountriesInfo::class        => Service\CountriesFactory::class,
+            Migration\MigrationRunner::class => Service\MigrationRunnerFactory::class,
+            Console\Command\MigrateCommand::class
+                => Service\MigrateCommandFactory::class,
+            Console\Command\ExportCatalogsCommand::class
+                => Service\ExportCatalogsCommandFactory::class,
         ],
         'aliases' => [
             'jtranslate_db_adapter' => Adapter::class,
