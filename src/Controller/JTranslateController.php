@@ -189,8 +189,34 @@ class JTranslateController extends AbstractActionController
             $form->setData($data);
             if ($form->isValid()) {
                 $table->deletePhrase($id);
-                $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_SUCCESS)
-                ->addMessage('Entity successfully deleted.');
+
+                //Deleting only the database row is not enough, and this is the half
+                //that was missing. The site does not read translations from the
+                //database — it reads the compiled catalogs — so a phrase deleted here
+                //went on being served indefinitely, until some unrelated edit happened
+                //to rewrite the files. The GUI reported success while the phrase was
+                //still visible on the site, which is the same shape of lie the edit
+                //action used to tell about failed writes.
+                //
+                //Same split as editAction(), for the same reason: the delete has
+                //already committed by the time this runs, so an export failure must
+                //not be reported as a failed delete.
+                try {
+                    $table->writePhpTranslationArrays();
+                    $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_SUCCESS)
+                        ->addMessage('Entity successfully deleted.');
+                } catch (\Exception $e) {
+                    //logged, not flashed: flash messages go through the translator when
+                    //they render, so a message carrying $e->getMessage() would record
+                    //itself as a missing translation and add a permanent, untranslatable
+                    //phrase row for every distinct filesystem error
+                    error_log('JTranslate: could not compile translation files after a '
+                        . 'deletion: ' . $e->getMessage());
+                    $this->flashMessenger()->setNamespace(FlashMessenger::NAMESPACE_ERROR)
+                        ->addMessage('The phrase was deleted from the database, but the compiled '
+                        . 'translation files could not be rewritten, so the site will go on showing '
+                        . 'it until that is fixed.');
+                }
                 return $this->redirect()->toUrl($this->url()->fromRoute('jtranslate'));
             } else {
                 $this->nowMessenger()->setNamespace(NowMessenger::NAMESPACE_ERROR)

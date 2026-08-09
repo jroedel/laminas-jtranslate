@@ -73,6 +73,9 @@ return [
     'The translation was saved to the database, but the compiled translation files'
     . ' could not be written, so the site will keep showing the old text until that'
     . ' is fixed.'                                                                   => [],
+    'The phrase was deleted from the database, but the compiled translation files'
+    . ' could not be rewritten, so the site will go on showing it until that is'
+    . ' fixed.'                                                                      => [],
     'Entity successfully deleted.'                             => [
         'es_ES' => 'Entidad exitosamente eliminada.',
     ],
