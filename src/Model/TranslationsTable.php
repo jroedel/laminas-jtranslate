@@ -5,25 +5,35 @@ use Laminas\Db\Adapter\AdapterAwareInterface;
 use Laminas\Db\TableGateway\AbstractTableGateway;
 use Laminas\Db\Adapter\Adapter;
 use Laminas\Db\TableGateway\TableGatewayInterface;
-use Laminas\Cache\Storage\StorageInterface;
 use Laminas\Db\Adapter\AdapterInterface;
 use Laminas\Db\Sql\Sql;
 use Laminas\Db\Sql\Where;
-use JUser\Model\UserTable;
 use Laminas\Db\ResultSet\ResultSet;
-use SionModel\Db\Model\SionCacheTrait;
-use SionModel\Service\ActingUserProviderInterface;
-use Laminas\Mvc\MvcEvent;
+use JTranslate\Cache\PhraseCache;
+use JTranslate\Service\ActingUserProviderInterface;
+use JTranslate\Service\UserDirectoryInterface;
 
 class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
 {
-    use SionCacheTrait;
+    /**
+     * Every phrase already known to the database, as [text domain => [md5 => true]].
+     *
+     * @see getPhraseIndex() for why it holds hashes rather than the phrases.
+     * @var array<string, array<string, true>> $phraseIndex
+     */
+    protected $phraseIndex = [];
 
     /**
+     * Whether $phraseIndex has been read from the database yet.
      *
-     * @var array $phrasesInDb
+     * A separate flag rather than a null check, because an empty index is a legitimate
+     * answer — a brand new project has no phrases — and testing emptiness would make
+     * every miss re-run the query.
+     *
+     * @var bool $phraseIndexLoaded
      */
-    protected $phrasesInDb;
+    protected $phraseIndexLoaded = false;
+
     /**
      *
      * @var array $newMissingTranslations
@@ -62,9 +72,15 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
     /**
      *
-     * @var UserTable $userTable
+     * @var UserDirectoryInterface|null $userTable
      */
     protected $userTable;
+
+    /**
+     *
+     * @var PhraseCache $cache
+     */
+    protected $cache;
 
     /**
      *
@@ -87,29 +103,47 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
     protected $filePattern = '%s.lang.php'; //@todo make this configurable
 
     /**
+     * There is no event manager parameter and no framework type in this signature.
      *
-     * @param TableGatewayInterface $gateway
-     * @param StorageInterface $cache
+     * The old constructor took a Laminas\EventManager and attached itself to
+     * MvcEvent::EVENT_FINISH from inside the model, which is why a translation model
+     * could not be constructed at all without laminas-mvc — not in a Symfony request,
+     * not in a console command, not in a unit test. Wiring the end-of-request flush is
+     * the framework adapter's job and now lives in TranslationsTableFactory, which is
+     * allowed to know it is running under laminas. Call flush() yourself from anywhere
+     * else.
+     *
+     * The eager getPhraseIndex() call is gone too. It ran a query over every phrase in
+     * the project before the router had matched, so a request that never translated
+     * anything still paid for it. It is now read on first use.
+     *
+     * @param TableGatewayInterface $phrasesGateway
+     * @param TableGatewayInterface $translationsGateway
+     * @param PhraseCache $cache
      * @param array $config
+     * @param ActingUserProviderInterface|null $actingUserProvider
+     * @param UserDirectoryInterface|null $userTable
+     * @param string $rootDirectory
      * @todo throw error if no project_name config key exists
      */
-    public function __construct($phrasesGateway, $translationsGateway, $cache, $config, $actingUserProvider, $userTable, $rootDirectory, $eventManager)
-    {
+    public function __construct(
+        $phrasesGateway,
+        $translationsGateway,
+        PhraseCache $cache,
+        $config,
+        $actingUserProvider,
+        $userTable,
+        $rootDirectory
+    ) {
         $this->phrasesGateway       = $phrasesGateway;
         $this->translationsGateway  = $translationsGateway;
         $this->adapter              = $phrasesGateway->getAdapter();
         $this->config               = $config;
+        $this->cache                = $cache;
         $this->actingUserProvider   = $actingUserProvider;
         $this->userTable            = $userTable;
         $this->newMissingPhrases    = [];
 
-        if (isset($cache)) {
-            $this->setPersistentCache($cache);
-            $this->wireOnFinishTrigger($eventManager);
-        }
-        $eventManager->attach(MvcEvent::EVENT_FINISH, [$this, 'finishUp'], -1);
-
-        $this->phrasesInDb          = $this->getPhraseKeysFromDb();
         $this->setRootDirectory($rootDirectory);
     }
 
@@ -147,9 +181,6 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 //         $cacheKey = 'translations';
 //         if ($fromAllProjects) {
 //             $cacheKey.='-from-all-projects';
-//         }
-//         if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
-//             return $cache;
 //         }
         $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`, t.`locale`,t.`translation`,
 t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`, p.`origin_route`
@@ -203,7 +234,6 @@ ORDER BY `text_domain`, `phrase`";
                 ? \DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc)
                 : null;
         }
-//         $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
     }
 
@@ -288,7 +318,7 @@ HAVING PhraseLocaleCount < ?";
                 $results[] = $statement->execute();
             }
         }
-        $this->removeDependentCacheItems('phrase');
+        $this->invalidatePhraseCaches();
         return $results;
     }
 
@@ -331,7 +361,7 @@ HAVING PhraseLocaleCount < ?";
         }
 
         if ($refreshCache) {
-            $this->removeDependentCacheItems('phrase');
+            $this->invalidatePhraseCaches();
         }
 
         return $return;
@@ -359,38 +389,61 @@ HAVING PhraseLocaleCount < ?";
     }
 
     /**
+     * The set of phrases already in the database, per text domain, as hashes.
      *
-     * @return string[][]
+     * ## Why hashes, and why this used to be uncacheable
+     *
+     * This is a membership set and nothing else — the only question ever asked of it
+     * is "have we seen this phrase in this domain before". It used to hold the phrases
+     * themselves, in a list, which made it wrong twice over.
+     *
+     * Measured on this project's data: 6,860 phrases whose average length is 1,494
+     * characters, because 86% of them are book and dictionary bodies rather than UI
+     * labels. Serialized, that array is **9.9 MiB**. It therefore blew straight past
+     * the cache's item budget and was silently never stored, so the query behind it
+     * ran on every single request — and had it been stored, an item that size against
+     * production's 32 MB APCu segment is the exact shape of the allocation failure
+     * that wipes the whole segment. Hashing takes it to roughly 270 KiB, which fits,
+     * so this is cached for the first time.
+     *
+     * Keying by hash also turns the membership test from an in_array() scan over up to
+     * 5,922 strings into an isset().
+     *
+     * ## Why the hashing is not done in SQL
+     *
+     * `SELECT MD5(phrase)` would move 220 KiB over the wire instead of 10 MiB, and it
+     * is tempting. It is also charset-dependent: MySQL's MD5() hashes the value's bytes
+     * in its own character set, and any mismatch with what PHP receives yields hashes
+     * that never match. The failure would be silent and permanent — every phrase would
+     * look new, so every request would insert duplicates of every phrase forever. The
+     * 10 MiB read now happens once per cache lifetime rather than once per request,
+     * which is the part that mattered.
+     *
+     * @return array<string, array<string, true>> text domain => set of md5(phrase)
      */
-    public function getPhraseKeysFromDb()
+    public function getPhraseIndex()
     {
-        $cacheKey = 'phrase-keys';
-        if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
-            return $cache;
+        if (null !== ($cached = $this->cache->get(PhraseCache::KEY_PHRASE_INDEX))) {
+            return $cached;
         }
-        $where = new Sql($this->adapter);
-        $where  ->select($this->config['phrases_table_name'])
+
+        //only the two columns the set is built from; the other three were read and
+        //discarded on every request
+        $select = new Sql($this->adapter);
+        $select ->select($this->config['phrases_table_name'])
                 ->columns([
-                    'translation_phrase_id',
-                    'project',
                     'text_domain',
                     'phrase',
-                    'added_on',
                 ])
-                ->where(['project' => $this->config['project_name']])
-                ->order(['project', 'text_domain', 'phrase']);
-        $results = $this->fetchSome($where);
+                ->where(['project' => $this->config['project_name']]);
+        $results = $this->fetchSome($select);
+
         $return = [];
-        foreach ($results as $tran) {
-            if (key_exists($tran['text_domain'], $return)) {
-                array_push($return[$tran['text_domain']], $tran['phrase']);
-            } else {
-                $return[$tran['text_domain']] = [
-                    $tran['phrase']
-                ];
-            }
+        foreach ($results as $row) {
+            $return[$row['text_domain']][md5($row['phrase'])] = true;
         }
-        $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
+
+        $this->cache->set(PhraseCache::KEY_PHRASE_INDEX, $return);
         return $return;
     }
 
@@ -400,27 +453,29 @@ HAVING PhraseLocaleCount < ?";
      */
     protected function addMissingPhrase($params)
     {
-        if (!isset($this->phrasesInDb[$params['text_domain']])) {
-            $this->phrasesInDb[$params['text_domain']] = [$params['message']];
-        } else {
-            $this->phrasesInDb[$params['text_domain']][] = $params['message'];
-        }
-        if (!isset($this->newMissingPhrases[$params['text_domain']])) {
-            $this->newMissingPhrases[$params['text_domain']] = [$params['message']];
-        } else {
-            $this->newMissingPhrases[$params['text_domain']][] = $params['message'];
-        }
+        //marking it seen keeps a phrase that appears twice on one page from being
+        //queued, and inserted, twice
+        $this->phraseIndex[$params['text_domain']][md5($params['message'])] = true;
+        $this->newMissingPhrases[$params['text_domain']][] = $params['message'];
         return $this;
     }
 
     /**
+     * Note a phrase the translator asked for and the database has never seen.
+     *
+     * Called from the translator's missing-translation event, so it runs inside page
+     * rendering and must stay cheap: the index is loaded once per request and the
+     * test is an isset() on a hash rather than a scan over every phrase in the domain.
      *
      * @param array $params
      */
     public function reportMissingTranslation($params)
     {
-        if (!isset($this->phrasesInDb[$params['text_domain']]) ||
-            !in_array($params['message'], $this->phrasesInDb[$params['text_domain']])) {
+        if (! $this->phraseIndexLoaded) {
+            $this->phraseIndex       = $this->getPhraseIndex();
+            $this->phraseIndexLoaded = true;
+        }
+        if (!isset($this->phraseIndex[$params['text_domain']][md5($params['message'])])) {
             $this->addMissingPhrase($params);
         }
         return $this;
@@ -432,9 +487,8 @@ HAVING PhraseLocaleCount < ?";
      */
     public function getTranslatedText()
     {
-        $cacheKey = 'translated-text';
-        if (null !== ($cache = $this->fetchCachedEntityObjects($cacheKey))) {
-            return $cache;
+        if (null !== ($cached = $this->cache->get(PhraseCache::KEY_TRANSLATED_TEXT))) {
+            return $cached;
         }
         $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`,
 t.`locale`, t.`translation`, p.`text_domain`,  p.`phrase`
@@ -463,14 +517,44 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 ];
             }
         }
-        $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
+        $this->cache->set(PhraseCache::KEY_TRANSLATED_TEXT, $return);
         return $return;
     }
 
-    public function finishUp(MvcEvent $e)
+    /**
+     * Persist whatever this request discovered, and drop the two derived caches.
+     *
+     * This is the end-of-request entry point, and it takes a plain string rather than
+     * a framework event so that the caller can be anything: the laminas listener wired
+     * in TranslationsTableFactory, a Symfony kernel.terminate subscriber, a console
+     * command, a test. finishUp(MvcEvent) — which is what used to be here — could only
+     * ever be called by laminas-mvc, and that single type hint was most of the reason
+     * this module could not be used anywhere else.
+     *
+     * @param string|null $routeName recorded on new phrases as the place they were
+     *        first seen, which is the only clue a translator gets about context
+     * @return \Laminas\Db\Adapter\Driver\ResultInterface[]
+     */
+    public function flush($routeName = null)
     {
-        $match = $e->getRouteMatch();
-        $this->writeMissingPhrasesToDb($match ? $match->getMatchedRouteName() : null);
+        return $this->writeMissingPhrasesToDb($routeName);
+    }
+
+    /**
+     * Forget both derived caches, in memory and in the persistent store.
+     *
+     * Replaces removeDependentCacheItems('phrase') from SionCacheTrait. That method
+     * walked a persisted map of cache key to invalidating entity name, and JTranslate
+     * registered exactly one entity against exactly two keys, so the map could only
+     * ever answer "both of them".
+     */
+    protected function invalidatePhraseCaches()
+    {
+        $this->cache->clear();
+        //the in-request copy of the membership set is derived from the same rows, so
+        //it is stale for the same reason and must be re-read rather than reused
+        $this->phraseIndex       = [];
+        $this->phraseIndexLoaded = false;
     }
 
     /**
@@ -670,17 +754,13 @@ ORDER BY `locale`, `text_domain`, `phrase`";
      */
     public function writeMissingPhrasesToDb($routeName = null)
     {
-        //Nothing was missing, so there is nothing to write. This guard is the
-        //difference between ~440ms and ~170ms on every laminas-served page, because
-        //finishUp() calls this method at MvcEvent::EVENT_FINISH unconditionally and
-        //everything below it is expensive whether or not there is work to do:
-        //getTranslations(true) is a 7,766-phrase join plus the entire user table
-        //(measured 221ms), and the removeDependentCacheItems('phrase') at the end
-        //evicts the very APCu items SionCacheTrait's own EVENT_FINISH listener wrote
-        //moments earlier — it is attached at priority 100, this at -1 — so the
-        //persistent cache was written and destroyed inside every single request and
-        //could never produce a hit. The 1.0.x line has had this since 2022-07-16
-        //(1c055c4); the modernization line forked before it and never picked it up.
+        //Nothing was missing, so there is nothing to write. flush() is called at the
+        //end of every request whether or not this one discovered a phrase, and
+        //everything below is expensive: getTranslations(true) is a 7,766-phrase join
+        //plus the entire user directory, measured at 221ms, and the invalidation at
+        //the end throws away caches that were still valid. Measured on /en/books,
+        //440ms -> 225ms. The 1.0.x line has had this guard since 2022-07-16 (1c055c4);
+        //the modernization line forked in 2020 and never picked it up.
         if (empty($this->newMissingPhrases)) {
             return [];
         }
@@ -770,9 +850,9 @@ ORDER BY `locale`, `text_domain`, `phrase`";
 
             }
         }
-        $this->removeDependentCacheItems('phrase');
+        $this->invalidatePhraseCaches();
         if ($weFoundAPreviousMatch) {
-            //This runs inside a normal page request, from finishUp() at
+            //This runs inside a normal page request, from flush() at
             //MvcEvent::EVENT_FINISH — which laminas fires *before* SendResponseListener
             //(priority -10000) has sent anything. So an exception escaping here would
             //replace whatever page the visitor asked for with a 500, on a request that
@@ -796,10 +876,19 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         return $this;
     }
 
+    /**
+     * @return UserDirectoryInterface
+     * @throws \RuntimeException when no directory was injected. Only the admin listing
+     *         needs one, so a deployment that never opens the translation GUI can leave
+     *         it out; asking for it anyway is a wiring mistake worth reporting.
+     */
     public function getUserTable()
     {
         if (!$this->userTable) {
-            throw new \Exception('User table not loaded into TranslationsTable');
+            throw new \RuntimeException(
+                'No UserDirectoryInterface was given to TranslationsTable, so translations '
+                . 'cannot be attributed to a user.'
+            );
         }
         return $this->userTable;
     }
