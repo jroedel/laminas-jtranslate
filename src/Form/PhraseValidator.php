@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JTranslate\Form;
 
+use JTranslate\I18n\LanguageMap;
 use Laminas\Db\Adapter\Adapter;
 use Laminas\Db\TableGateway\Feature\GlobalAdapterFeature;
 use Laminas\InputFilter\InputFilterInterface;
@@ -66,6 +67,8 @@ final class PhraseValidator
      */
     public const SESSION_ONLY_INPUT = 'security';
 
+    private ?LanguageMap $languages = null;
+
     /**
      * @param list<string> $locales the writable locale codes, from TranslationsTable::getLocales(true)
      */
@@ -75,6 +78,23 @@ final class PhraseValidator
         private readonly string $translationsTableName,
         private readonly Adapter $adapter
     ) {
+    }
+
+    /**
+     * The same set as {@see self::writableLocales()}, addressed by language code.
+     *
+     * A public interface should say `de`, not `de_DE`: the region subtag is an artefact
+     * of how this module keys catalogs, and no caller outside the application should
+     * have to learn that German happens to be stored as `de_DE` here rather than
+     * `de_AT`. Storage keeps the locale; the boundary translates.
+     *
+     * Built lazily, because it throws on an ambiguous configuration — two locales
+     * sharing a primary subtag — and a caller that only wants the locales should not be
+     * stopped by that. See {@see LanguageMap}.
+     */
+    public function languages(): LanguageMap
+    {
+        return $this->languages ??= new LanguageMap($this->locales);
     }
 
     /**
