@@ -157,6 +157,11 @@ return [
             'JTranslate\Config'         => Service\ConfigServiceFactory::class,
             Model\TranslationsTable::class    => Service\TranslationsTableFactory::class,
             Form\EditPhraseForm::class       => Service\EditPhraseFormFactory::class,
+            //The edit form's rules with no browser behind them, for a caller that
+            //validates a translation outside the GUI. Registered as a service rather
+            //than left to callers because building it by hand means reproducing three
+            //internals of this module — see Form\PhraseValidator.
+            Form\PhraseValidator::class      => Service\PhraseValidatorFactory::class,
             Model\CountriesInfo::class        => Service\CountriesFactory::class,
             Migration\MigrationRunner::class => Service\MigrationRunnerFactory::class,
             Console\Command\MigrateCommand::class
