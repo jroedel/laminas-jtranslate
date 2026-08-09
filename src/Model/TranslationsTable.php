@@ -76,7 +76,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      *
      * @var array $userModules
      */
-    protected $userModules;
+    protected $userModules = [];
 
     /**
      * The full path to the root of the MVC project
@@ -162,35 +162,46 @@ ORDER BY `text_domain`, `phrase`";
         $userTable = $this->getUserTable();
         $users = $userTable->getUsers();
         $return = [];
-        foreach ($results as $row) { //@todo avoid setting null locale keys for records without any translations
+        foreach ($results as $row) {
             //skip rows from other projects if we don't need them
             if (!$fromAllProjects && $row['project'] !== $this->config['project_name']) {
                 continue;
             }
-            //if we already already have an entry for this phrase
-            $userId = (int)$row['modified_by'];
-            $user = (isset($userId) && isset($users[$userId]))
-                ? $users[$userId] : null;
-            if (isset($return[$row['translation_phrase_id']])) {
-                $return[$row['translation_phrase_id']][$row['locale']] = $row['translation'];
-                $return[$row['translation_phrase_id']][$row['locale'].'Id'] = $row['translation_id'];
-                $return[$row['translation_phrase_id']][$row['locale'].'ModifiedBy'] = $user;
-                $return[$row['translation_phrase_id']][$row['locale'].'ModifiedOn'] = isset($row['modified_on']) ?
-                    \DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc) : null;
-            } else {
-                $return[$row['translation_phrase_id']] = [
-                    'phraseId' => $row['translation_phrase_id'],
-                    $row['locale']             => $row['translation'],
-                    $row['locale'].'Id'        => $row['translation_id'],
-                    $row['locale'].'ModifiedBy'=> $user,
-                    $row['locale'].'ModifiedOn'=> $row['modified_on'] ?
-                        \DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc) : null,
-                    'textDomain'                => $row['text_domain'],
-                    'phrase'                    => $row['phrase'],
-                    'originRoute'               => $row['origin_route'],
-                    'addedOn'                   => $row['added_on'],
+            $phraseId = $row['translation_phrase_id'];
+
+            //The phrase-level keys are the same on every row for a phrase, so they
+            //are set once, independently of the locale columns below. They used to
+            //be written only on the branch that created the entry, interleaved with
+            //that row's locale keys; splitting them is what allows a phrase with no
+            //translations at all to get an entry without a null-keyed locale.
+            if (!isset($return[$phraseId])) {
+                $return[$phraseId] = [
+                    'phraseId'    => $phraseId,
+                    'textDomain'  => $row['text_domain'],
+                    'phrase'      => $row['phrase'],
+                    'originRoute' => $row['origin_route'],
+                    'addedOn'     => $row['added_on'],
                 ];
             }
+
+            //This is a LEFT JOIN, so a phrase with no translation rows arrives once
+            //with every t.* column NULL. Writing $return[$phraseId][null] for it is
+            //deprecated in PHP 8.5 and an Error in PHP 9 — and it ran on every
+            //request through finishUp(), so it was a site-wide fatal in waiting, not
+            //an admin-page one. Nothing downstream ever wanted the null-keyed entry:
+            //readers ask for a specific locale by name.
+            if (null === $row['locale']) {
+                continue;
+            }
+
+            $locale = $row['locale'];
+            $userId = (int) $row['modified_by'];
+            $return[$phraseId][$locale]                = $row['translation'];
+            $return[$phraseId][$locale . 'Id']         = $row['translation_id'];
+            $return[$phraseId][$locale . 'ModifiedBy'] = $users[$userId] ?? null;
+            $return[$phraseId][$locale . 'ModifiedOn'] = isset($row['modified_on'])
+                ? \DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc)
+                : null;
         }
 //         $this->cacheEntityObjects($cacheKey, $return, ['phrase']);
         return $return;
@@ -465,37 +476,131 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     /**
      * Queries the database for the latest translations and rewrites all the files.
      *
+     * @return string[] the absolute paths written, in write order
+     * @throws \RuntimeException if any directory or file could not be written. The
+     *         caller decides what that means: the admin action reports it to the
+     *         translator, the request-path caller logs it and carries on. What must
+     *         never happen again is the third option this method used to take, which
+     *         was to discard every return value and report success regardless.
      */
     public function writePhpTranslationArrays()
     {
         $translations = $this->getTranslatedText();
+        $written = [];
         foreach ($translations as $textDomain => $localeTrans) {
-            foreach ($localeTrans as $locale => $trans) {
-                $code = "<?php\n\nreturn ".$this->exportArray($trans).";\n";
+            //a text domain that names a loaded module keeps its export inside that
+            //module; every other domain goes to a subfolder of the project's own
+            //language/ directory. The old code also tried to mkdir the *module*
+            //directory in the branch where the module was known to exist, which
+            //could not help and is gone; ensureDirectory() creates recursively.
+            $folder = key_exists($textDomain, $this->userModules)
+                ? $this->rootDirectory . '/module/' . $textDomain . '/language'
+                : $this->rootDirectory . '/language/' . $textDomain;
+            $this->ensureDirectory($folder);
 
-                //if the current text domain is a module, then save it there. If not, to the root.
-                if (key_exists($textDomain, $this->userModules)) {
-                    $folder = $this->rootDirectory.'/module/'.$textDomain.'/language';
-                    if (!file_exists($this->rootDirectory.'/module/'.$textDomain)) {
-                        mkdir($this->rootDirectory.'/module/'.$textDomain, 0775, true);
-                        @chmod($this->rootDirectory.'/module/'.$textDomain, 0775);
-                    }
-                } else {
-                    $folder = $this->rootDirectory.'/language/'.$textDomain;
-                    if (!file_exists($this->rootDirectory.'/language')) {
-                        mkdir($this->rootDirectory.'/language', 0775, true);
-                        @chmod($this->rootDirectory.'/language', 0775);
-                    }
-                }
-                if (!is_dir($folder)) {
-                    mkdir($folder, 0775, true);
-                    @chmod($folder, 0775); /** @see https://stackoverflow.com/questions/3764973/php-mkdir-chmod-and-permissions#3769014 */
-                }
-                $fileToWrite = $folder.'/'.sprintf($this->filePattern, $locale);
-                file_put_contents($fileToWrite, $code);
-                @chmod($fileToWrite, 0775);
+            foreach ($localeTrans as $locale => $trans) {
+                $code = "<?php\n\nreturn " . $this->exportArray($trans) . ";\n";
+                $written[] = $this->writeCatalogAtomically(
+                    $folder . '/' . sprintf($this->filePattern, $locale),
+                    $code
+                );
             }
         }
+        return $written;
+    }
+
+    /**
+     * Create a directory if it is not already there, or fail loudly.
+     *
+     * The explicit chmod after mkdir() is not redundant: mkdir()'s mode argument is
+     * masked by the process umask, so under a common 0022 a 0775 request lands as
+     * 0755 and the web server's group loses the write permission it needs for the
+     * catalogs about to be created inside.
+     *
+     * @param string $folder
+     * @throws \RuntimeException
+     */
+    protected function ensureDirectory($folder)
+    {
+        if (is_dir($folder)) {
+            return;
+        }
+        //the second test covers the race where a concurrent request created it
+        //between our is_dir() and our mkdir()
+        if (!@mkdir($folder, 0775, true) && !is_dir($folder)) {
+            throw new \RuntimeException(sprintf(
+                'Could not create the translation directory %s (%s). Translations are '
+                . 'saved in the database but cannot be compiled until this path is '
+                . 'writable by the web server user.',
+                $folder,
+                error_get_last()['message'] ?? 'no error reported'
+            ));
+        }
+        @chmod($folder, 0775);
+    }
+
+    /**
+     * Write one compiled catalog, atomically, and retire the stale compiled copy.
+     *
+     * Three properties this needs that a bare file_put_contents() does not provide:
+     *
+     * - **Atomicity.** These files are include()d by concurrent requests. Writing in
+     *   place lets another process compile a half-written file, which surfaces as a
+     *   parse error in the middle of an unrelated page — an intermittent failure that
+     *   presents as a permissions problem and is not one. A temporary file in the
+     *   same directory followed by rename() is atomic on POSIX, so a reader sees
+     *   either the whole previous file or the whole new one, never a splice. It also
+     *   fixes the common deployment case outright: rename() needs write permission on
+     *   the *directory*, not on the existing file, so a catalog left behind by a
+     *   deploy running as a different user is now replaceable instead of a hard stop.
+     * - **A failure that is visible.** See the class docblock on the caller. Silence
+     *   was the actual bug, not the permissions.
+     * - **OPcache coherence.** The compiled copy of the previous file outlives the
+     *   write by up to opcache.revalidate_freq seconds, and forever if a deployment
+     *   ever sets opcache.validate_timestamps=0 — a normal production tuning step
+     *   that would otherwise make freshly saved translations permanently invisible.
+     *
+     * The mode is 0664. Nothing executes these files, and the exec bits the old code
+     * set came from reusing the directory's mode for a data file.
+     *
+     * @param string $fileToWrite
+     * @param string $code
+     * @return string $fileToWrite
+     * @throws \RuntimeException
+     */
+    protected function writeCatalogAtomically($fileToWrite, $code)
+    {
+        //deliberately not tempnam(): when the target directory is not writable it
+        //silently falls back to the system temp directory, and the rename() below
+        //would then cross a filesystem boundary and fail. Building the name from the
+        //target path keeps the temporary file in the directory we are committing to.
+        $temp = $fileToWrite . '.' . getmypid() . '.tmp';
+
+        if (false === @file_put_contents($temp, $code)) {
+            throw new \RuntimeException(sprintf(
+                'Could not write the translation catalog %s (%s). The directory must be '
+                . 'writable by the web server user.',
+                $temp,
+                error_get_last()['message'] ?? 'no error reported'
+            ));
+        }
+        @chmod($temp, 0664);
+
+        if (!@rename($temp, $fileToWrite)) {
+            $message = error_get_last()['message'] ?? 'no error reported';
+            @unlink($temp);
+            throw new \RuntimeException(sprintf(
+                'Could not move the new translation catalog into place at %s (%s).',
+                $fileToWrite,
+                $message
+            ));
+        }
+
+        if (function_exists('opcache_invalidate')) {
+            opcache_invalidate($fileToWrite, true);
+        }
+
+        return $fileToWrite;
     }
 
     /**
@@ -565,7 +670,23 @@ ORDER BY `locale`, `text_domain`, `phrase`";
      */
     public function writeMissingPhrasesToDb($routeName = null)
     {
-        $dateString = date_format((new \DateTime(null, new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
+        //Nothing was missing, so there is nothing to write. This guard is the
+        //difference between ~440ms and ~170ms on every laminas-served page, because
+        //finishUp() calls this method at MvcEvent::EVENT_FINISH unconditionally and
+        //everything below it is expensive whether or not there is work to do:
+        //getTranslations(true) is a 7,766-phrase join plus the entire user table
+        //(measured 221ms), and the removeDependentCacheItems('phrase') at the end
+        //evicts the very APCu items SionCacheTrait's own EVENT_FINISH listener wrote
+        //moments earlier — it is attached at priority 100, this at -1 — so the
+        //persistent cache was written and destroyed inside every single request and
+        //could never produce a hit. The 1.0.x line has had this since 2022-07-16
+        //(1c055c4); the modernization line forked before it and never picked it up.
+        if (empty($this->newMissingPhrases)) {
+            return [];
+        }
+        //'now', not null: passing null here is deprecated since PHP 8.1 and a
+        //TypeError in PHP 9, and this line is on the every-request path.
+        $dateString = date_format((new \DateTime('now', new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
         $translations = $this->getTranslations(true);
 
         $localesToSearch = $this->config['locales_to_translate'];
@@ -651,7 +772,20 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         }
         $this->removeDependentCacheItems('phrase');
         if ($weFoundAPreviousMatch) {
-            $this->writePhpTranslationArrays();
+            //This runs inside a normal page request, from finishUp() at
+            //MvcEvent::EVENT_FINISH — which laminas fires *before* SendResponseListener
+            //(priority -10000) has sent anything. So an exception escaping here would
+            //replace whatever page the visitor asked for with a 500, on a request that
+            //had nothing to do with translating. Trading a silent export failure for an
+            //availability failure is not an improvement: log it and let the page render.
+            //The admin action calls writePhpTranslationArrays() directly and does want
+            //the exception, which is why the catch lives here and not in the method.
+            try {
+                $this->writePhpTranslationArrays();
+            } catch (\RuntimeException $e) {
+                error_log('JTranslate: could not compile translation files after '
+                    . 'discovering new phrases: ' . $e->getMessage());
+            }
         }
         return $result;
     }

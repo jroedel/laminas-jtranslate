@@ -97,13 +97,38 @@ class JTranslateController extends AbstractActionController
                     //length checks isValid() just performed and writes exactly
                     //what the browser sent.
                     $table->updatePhrase ( $id, $form->getData() );
-                    //update the translation files
-                    $table->writePhpTranslationArrays();
-                    $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_SUCCESS )->addMessage ( 'Translations successfully updated.' );
-                    return $this->redirect ()->toUrl ( $this->url ()->fromRoute ( 'jtranslate' ) );
                 } catch (\Exception $e) {
                     $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Error in form submission, please review.' );
+                    $form->setAttribute('action', $this->getRequest()->getRequestUri());
+                    return new ViewModel([
+                        'phrase' => $phrase,
+                        'phraseId' => $id,
+                        'form' => $form,
+                        'locales' => $locales,
+                    ]);
                 }
+
+                //A separate try, because by this point the database write has
+                //already committed. Compiling the php arrays is what makes the
+                //new translation visible to the site, and when it fails the
+                //translator has to be told precisely that — the save worked, the
+                //site will keep showing the old text. Reporting it as 'Error in
+                //form submission, please review' would send them to re-edit a
+                //phrase that is already correct in the database; reporting it as
+                //success, which is what this action did until now because every
+                //write return value was discarded, told them the opposite of the
+                //truth. Both were wrong in the same direction.
+                try {
+                    $table->writePhpTranslationArrays();
+                    $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_SUCCESS )->addMessage ( 'Translations successfully updated.' );
+                } catch (\Exception $e) {
+                    $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage (
+                        'The translation was saved to the database, but the compiled translation '
+                        . 'files could not be written, so the site will keep showing the old text '
+                        . 'until that is fixed. ' . $e->getMessage()
+                    );
+                }
+                return $this->redirect ()->toUrl ( $this->url ()->fromRoute ( 'jtranslate' ) );
             } else {
                 $this->flashMessenger ()->setNamespace ( FlashMessenger::NAMESPACE_ERROR )->addMessage ( 'Error in form submission, please review.' );
             }
