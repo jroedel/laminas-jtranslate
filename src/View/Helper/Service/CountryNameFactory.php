@@ -2,7 +2,7 @@
 namespace JTranslate\View\Helper\Service;
 
 use Laminas\ServiceManager\Factory\FactoryInterface;
-use Interop\Container\ContainerInterface;
+use Psr\Container\ContainerInterface;
 use JTranslate\Model\CountriesInfo;
 use JTranslate\View\Helper\CountryName;
 

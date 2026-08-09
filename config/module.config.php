@@ -139,7 +139,7 @@ return [
     ],
     'service_manager' => [
         'factories' => [
-            'JTranslate\Cache'          => Service\CacheFactory::class,
+            Cache\PhraseCache::class    => Service\PhraseCacheFactory::class,
             'JTranslate\Config'         => Service\ConfigServiceFactory::class,
             Model\TranslationsTable::class    => Service\TranslationsTableFactory::class,
             Form\EditPhraseForm::class       => Service\EditPhraseFormFactory::class,

@@ -1,9 +1,9 @@
 {
-    "name": "jroedel/zf3-jtranslate",
+    "name": "jroedel/laminas-jtranslate",
     "type": "library",
-    "description": "Zend Framework 3 module to provide a translation GUI",
-    "keywords": ["Zend Framework 3","translation", "gui"],
-    "homepage": "https://github.com/jroedel/zf2-jtranslate",
+    "description": "Database-backed translation for Laminas MVC, with an editing GUI and catalogs precompiled to PHP arrays",
+    "keywords": ["laminas", "translation", "i18n", "gui"],
+    "homepage": "https://github.com/jroedel/laminas-jtranslate",
     "license": "MIT",
     "authors": [
         {
@@ -13,19 +13,33 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/jroedel/zf2-jtranslate/issues"
+        "issues": "https://github.com/jroedel/laminas-jtranslate/issues"
     },
-    "minimum-stability" : "stable",
+    "minimum-stability": "stable",
     "require": {
-        "php": ">=5.3.3",
-        "laminas/laminas-code": "^3.0.2 || ^2.5.0",
-        "laminas/laminas-i18n": "^2.5.0",
-		"cakephp/utility": "^3.2.0",
-        "mledoze/countries": "^1.8.0"
+        "php": "^8.1",
+        "ext-intl": "*",
+        "psr/container": "^1.1 || ^2.0",
+        "psr/simple-cache": "^2.0 || ^3.0",
+        "laminas/laminas-cache": "^3.0 || ^4.0",
+        "laminas/laminas-db": "^2.15",
+        "laminas/laminas-eventmanager": "^3.4",
+        "laminas/laminas-form": "^3.0",
+        "laminas/laminas-i18n": "^2.17",
+        "laminas/laminas-inputfilter": "^2.15",
+        "laminas/laminas-json": "^3.3",
+        "laminas/laminas-modulemanager": "^2.11",
+        "laminas/laminas-mvc": "^3.3",
+        "laminas/laminas-router": "^3.5",
+        "laminas/laminas-servicemanager": "^3.11",
+        "laminas/laminas-view": "^2.20"
     },
-	"autoload": {
-    	"psr-4": {
-        	"JTranslate\\": "module/JTranslate/src/"
-    	}
-	}
+    "autoload": {
+        "psr-4": {
+            "JTranslate\\": "src/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
 }
