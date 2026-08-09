@@ -174,6 +174,23 @@ renders, so it can carry information that project's users never agreed to publis
 elsewhere. `getTranslations($fromAllProjects = true)` is the one deliberate exception
 and is reachable only from the admin GUI.
 
+### Language codes at a public boundary
+
+`trans_translations.locale` stores ICU locales and always will — that is what
+`Laminas\I18n` resolves a catalog by. But a caller outside the application usually
+means a *language*, and the region subtag is noise to it.
+
+`JTranslate\I18n\LanguageMap` converts both ways, and
+`Form\PhraseValidator::languages()` hands one out already built from the configured
+set. schoenstatt.link's `/api/v3/phrases` uses it to speak `de` while storing `de_DE`.
+
+**An ambiguous configuration throws rather than resolving.** Two locales sharing a
+primary subtag — `pt_BR` beside `pt_PT` — make a language code stop identifying a
+translation, and the failure that matters is the write: a caller's Portuguese would be
+stored against whichever locale won, silently. A site that genuinely needs two variants
+of one language has outgrown language codes at its boundary and has to say so
+deliberately.
+
 ### Writing as somebody
 
 `setActingUserId()` fixes the identity every subsequent write is stamped with,
