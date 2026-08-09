@@ -10,7 +10,7 @@
 namespace JTranslate\View\Helper\Service;
 
 use Laminas\ServiceManager\Factory\FactoryInterface;
-use Interop\Container\ContainerInterface;
+use Psr\Container\ContainerInterface;
 use Laminas\View\Helper\FlashMessenger;
 use JTranslate\View\Helper\NowMessenger;
 

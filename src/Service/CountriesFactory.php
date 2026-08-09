@@ -2,7 +2,7 @@
 namespace JTranslate\Service;
 
 use Laminas\ServiceManager\Factory\FactoryInterface;
-use Interop\Container\ContainerInterface;
+use Psr\Container\ContainerInterface;
 use Laminas\Json\Json;
 use JTranslate\Model\CountriesInfo;
 

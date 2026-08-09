@@ -2,7 +2,7 @@
 namespace JTranslate\Service;
 
 use Laminas\ServiceManager\Factory\FactoryInterface;
-use Interop\Container\ContainerInterface;
+use Psr\Container\ContainerInterface;
 use JTranslate\Model\TranslationsTable;
 use JTranslate\Form\EditPhraseForm;
 
