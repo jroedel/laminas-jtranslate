@@ -1,4 +1,5 @@
 <?php
+
 namespace JTranslate;
 
 use Laminas\Router\Http\Segment;
@@ -18,7 +19,7 @@ return [
             'pt_BR'
         ],
         'key_locale' => 'en_US',
-        
+
         // cache options have to be compatible with Laminas\Cache\StorageFactory::factory
         'cache_options' => [
             'adapter' => [
@@ -26,7 +27,7 @@ return [
                 // With a namespace we can indicate the same type of items
                 // -> So we can simple use the db id as cache key
                 'options' => [
-                    'ttl'       => 3600*24, //1 day
+                    'ttl'       => 3600 * 24, //1 day
                     'namespace' => 'JTranslate'
                 ],
             ],
@@ -129,9 +130,9 @@ return [
 
     'view_helpers' => [
         'factories' => [
-            'flag'					=> View\Helper\Service\FlagFactory::class,
-            'countryName'			=> View\Helper\Service\CountryNameFactory::class,
-            'nowMessenger'	        => View\Helper\Service\NowMessengerFactory::class,
+            'flag'                  => View\Helper\Service\FlagFactory::class,
+            'countryName'           => View\Helper\Service\CountryNameFactory::class,
+            'nowMessenger'          => View\Helper\Service\NowMessengerFactory::class,
         ],
         'invokables' => [
             'languageName'          => View\Helper\LanguageName::class,
@@ -151,4 +152,3 @@ return [
         ],
     ],
 ];
-
