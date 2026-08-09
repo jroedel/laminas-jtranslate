@@ -140,6 +140,48 @@ Everything lives under the `jtranslate` key.
 **Never hand-edit a compiled catalog.** It is regenerated from the database and
 your change will disappear. Edit the database, or use the GUI.
 
+### Reading phrases: two paths, deliberately
+
+`getTranslations()` reads **every** phrase and translation of the project into one
+array and filters in PHP. Measured on a 6,874-phrase database that is **0.220 s and
+72.6 MB peak**, it memoizes nothing, and `getPhrase()` used to call it to return a
+single row — so reading one phrase cost the whole table.
+
+That is affordable once, on an admin listing that genuinely shows everything. It is not
+affordable per request, and it cannot express the question a caller with a filter
+actually asks, because filtering in PHP happens after the paging decision has already
+been made. So there is a second path:
+
+| method | for |
+| --- | --- |
+| `getTranslations($fromAllProjects)` | the admin listing, which wants all of it |
+| `countPhrases($criteria)` | how many match, ignoring paging |
+| `getPhrasePage($criteria, $limit, $offset)` | one page, filtered and paged in SQL |
+| `getPhraseById($id)` | one phrase — 0.0007 s, and what `getPhrase()` now calls |
+
+Criteria are named (`TranslationsTable::CRITERIA`) rather than free-form, because every
+one of them ends up in a `WHERE` clause and a caller that could pass an arbitrary
+column name could read across the `project` boundary.
+
+`getPhrasePage()` runs two queries rather than one join: a phrase joined to its
+translations yields one row per locale, so `LIMIT 100` over the join returns some
+number of phrases between 20 and 100 — paging a joined result set silently pages the
+wrong thing.
+
+**Everything here is scoped to `project_name` in SQL.** The phrase table is shared
+between projects, and a phrase is arbitrary text taken from whatever the other project
+renders, so it can carry information that project's users never agreed to publish
+elsewhere. `getTranslations($fromAllProjects = true)` is the one deliberate exception
+and is reachable only from the admin GUI.
+
+### Writing as somebody
+
+`setActingUserId()` fixes the identity every subsequent write is stamped with,
+overriding the configured provider. The provider reads the host application's session;
+a caller authenticated by a bearer token has an identity and no session, and without
+this every such write lands as `modified_by = NULL`. Named after
+`SionModel\Db\Model\SionTable::setActingUserId()` so both surfaces read the same.
+
 ### Caching
 
 Two derived arrays are cached, through `JTranslate\Cache\PhraseCache` over PSR-16:

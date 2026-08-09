@@ -161,6 +161,39 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
     }
 
     /**
+     * Write as this user, whatever the ambient identity says.
+     *
+     * The configured provider reads the host application's session, and a caller that
+     * has no session still has an identity: an API request authenticates with a bearer
+     * token, resolves it to a user id, and every row it writes has to carry that id or
+     * `modified_by` is NULL and the admin listing cannot say who wrote a translation.
+     * Attribution is most of the reason an automated agent is allowed to write at all.
+     *
+     * Named after `SionModel\Db\Model\SionTable::setActingUserId()` on purpose: the
+     * association API already reaches for that method and both surfaces should read
+     * the same.
+     *
+     * The provider is replaced rather than a field being set, so the "resolve at call
+     * time" contract on ActingUserProviderInterface still holds — the value is just
+     * fixed. Scoped to this instance, which on a Symfony-served request is scoped to
+     * the request.
+     *
+     * @param int|null $userId
+     * @return self
+     */
+    public function setActingUserId($userId)
+    {
+        $id = null === $userId ? null : (int) $userId;
+        $this->actingUserProvider = new \JTranslate\Service\Adapter\CallableActingUserProvider(
+            static function () use ($id) {
+                return $id;
+            }
+        );
+
+        return $this;
+    }
+
+    /**
      *  Set db adapter
      *
      *  @param Adapter $adapter
@@ -257,7 +290,260 @@ HAVING PhraseLocaleCount < ?";
 
     public function getPhrase($id)
     {
-        return $this->getTranslations()[$id];
+        return $this->getPhraseById((int) $id);
+    }
+
+    /**
+     * The criteria countPhrases() and getPhrasePage() understand.
+     *
+     * Named here rather than accepted as free-form SQL because every one of them ends
+     * up in a WHERE clause: a caller that could pass an arbitrary column name could
+     * read across the `project` boundary, which is the one thing this table must never
+     * allow. See the scoping note on phraseCriteria().
+     */
+    public const CRITERIA = [
+        'textDomain',
+        'originRoute',
+        'search',
+        'untranslatedIn',
+        'translatedIn',
+    ];
+
+    /**
+     * How many phrases of this project match, ignoring paging.
+     *
+     * @param array $criteria a subset of self::CRITERIA
+     * @return int
+     */
+    public function countPhrases(array $criteria = [])
+    {
+        $sql    = new Sql($this->adapter);
+        $select = $sql->select(['p' => $this->config['phrases_table_name']])
+            ->columns(['total' => new \Laminas\Db\Sql\Expression('COUNT(*)')]);
+        $this->applyPhraseCriteria($select, $criteria);
+
+        $row = $sql->prepareStatementForSqlObject($select)->execute()->current();
+
+        return is_array($row) ? (int) $row['total'] : 0;
+    }
+
+    /**
+     * One page of this project's phrases, hydrated with their translations.
+     *
+     * ## Why this exists next to getTranslations()
+     *
+     * getTranslations() reads every phrase and every translation of the project into
+     * one array and filters in PHP. Measured on this database it is **0.220 s and
+     * 72.6 MB peak** for 6,874 phrases, it memoizes nothing, and getPhrase() used to
+     * call it to return a single row — so reading one phrase cost the whole table.
+     * That is affordable once on an admin listing that genuinely shows everything and
+     * not affordable per request on an API, and it cannot express the question an API
+     * caller actually asks ("which German translations are missing in this text
+     * domain"), because filtering in PHP happens after the paging decision has already
+     * been made.
+     *
+     * getTranslations() is left exactly as it is: the admin listing wants all of it,
+     * and rewriting the GUI is not this change.
+     *
+     * ## Two queries, not one join
+     *
+     * A phrase joined to its translations yields one row per locale, so `LIMIT 100`
+     * over the join returns some number of phrases between 20 and 100 — paging a
+     * joined result set silently pages the wrong thing. The phrase rows are selected
+     * and paged first, and their translations fetched by id afterwards.
+     *
+     * @param array $criteria a subset of self::CRITERIA
+     * @param int $limit
+     * @param int $offset
+     * @return array phrase id => phrase record, in display order
+     */
+    public function getPhrasePage(array $criteria = [], $limit = 100, $offset = 0)
+    {
+        $sql    = new Sql($this->adapter);
+        $select = $sql->select(['p' => $this->config['phrases_table_name']])
+            ->columns([
+                'translation_phrase_id',
+                'text_domain',
+                'phrase',
+                'added_on',
+                'origin_route',
+            ])
+            //Ordered by the primary key last, so the sequence is total even when two
+            //phrases share a text domain and a text. Without a tie-break MySQL may
+            //return the same row on page 1 and page 2 and skip another entirely.
+            ->order(['text_domain' => 'ASC', 'phrase' => 'ASC', 'translation_phrase_id' => 'ASC'])
+            ->limit((int) $limit)
+            ->offset((int) $offset);
+        $this->applyPhraseCriteria($select, $criteria);
+
+        $rows = [];
+        foreach ($sql->prepareStatementForSqlObject($select)->execute() as $row) {
+            $rows[] = $row;
+        }
+
+        return $this->hydratePhrases($rows);
+    }
+
+    /**
+     * One phrase of this project, or null.
+     *
+     * The shape is the one getTranslations() produces for a single entry, because
+     * updatePhrase() reads `$phrase[$locale . 'Id']` out of it to decide between an
+     * UPDATE and an INSERT — and, more importantly, to decide *which row* to write.
+     * That indirection is the security property documented on updatePhrase(); a
+     * gratuitously different shape here would have meant reimplementing it.
+     *
+     * The one addition is `{locale}ModifiedById`, the raw user id. getTranslations()
+     * answers `{locale}ModifiedBy` as a whole user record from the user directory,
+     * which costs a full user load and hands a caller more than it asked for. Both
+     * keys are set here so the admin listing and the API each read the one they mean.
+     *
+     * **Project-scoped, like every other read here.** A phrase id is global to a table
+     * three projects share, so fetching by id alone would answer with another
+     * project's phrase for anyone who guessed an integer.
+     *
+     * @param int $id
+     * @return array|null
+     */
+    public function getPhraseById($id)
+    {
+        $sql    = new Sql($this->adapter);
+        $select = $sql->select(['p' => $this->config['phrases_table_name']])
+            ->columns([
+                'translation_phrase_id',
+                'text_domain',
+                'phrase',
+                'added_on',
+                'origin_route',
+            ])
+            ->where([
+                'p.translation_phrase_id' => (int) $id,
+                'p.project'               => $this->config['project_name'],
+            ]);
+
+        $row = $sql->prepareStatementForSqlObject($select)->execute()->current();
+        if (! is_array($row)) {
+            return null;
+        }
+
+        $hydrated = $this->hydratePhrases([$row]);
+
+        return $hydrated[(int) $id] ?? null;
+    }
+
+    /**
+     * Attach the translation rows to a set of phrase rows.
+     *
+     * @param array $rows raw trans_phrases rows
+     * @return array phrase id => phrase record, in the order given
+     */
+    protected function hydratePhrases(array $rows)
+    {
+        if ([] === $rows) {
+            return [];
+        }
+
+        $return = [];
+        $ids    = [];
+        foreach ($rows as $row) {
+            $id         = (int) $row['translation_phrase_id'];
+            $ids[]      = $id;
+            $return[$id] = [
+                'phraseId'    => $id,
+                'textDomain'  => $row['text_domain'],
+                'phrase'      => $row['phrase'],
+                'originRoute' => $row['origin_route'],
+                'addedOn'     => $row['added_on'],
+            ];
+        }
+
+        $sql    = new Sql($this->adapter);
+        $select = $sql->select($this->config['translations_table_name'])
+            ->columns([
+                'translation_id',
+                'translation_phrase_id',
+                'locale',
+                'translation',
+                'modified_by',
+                'modified_on',
+            ])
+            ->where(['translation_phrase_id' => $ids]);
+
+        $utc = new \DateTimeZone('UTC');
+        foreach ($sql->prepareStatementForSqlObject($select)->execute() as $row) {
+            $id     = (int) $row['translation_phrase_id'];
+            $locale = $row['locale'];
+            if (! isset($return[$id]) || null === $locale) {
+                continue;
+            }
+            $return[$id][$locale]                  = $row['translation'];
+            $return[$id][$locale . 'Id']           = $row['translation_id'];
+            $return[$id][$locale . 'ModifiedById'] = isset($row['modified_by']) ? (int) $row['modified_by'] : null;
+            $return[$id][$locale . 'ModifiedOn']   = isset($row['modified_on'])
+                ? \DateTime::createFromFormat('Y-m-d H:i:s', $row['modified_on'], $utc)
+                : null;
+        }
+
+        return $return;
+    }
+
+    /**
+     * Narrow a phrase select to this project and to the caller's criteria.
+     *
+     * **The project predicate is not a criterion and cannot be turned off.**
+     * `trans_phrases` is shared — this database holds phrases for three projects — and
+     * a phrase is arbitrary text taken from whatever the other project renders, so it
+     * can carry information that project's users never agreed to publish here. Every
+     * read path in this class that is reachable from a request scopes by
+     * `project_name`, and this method is the one place a new read path gets it for
+     * free. getTranslations($fromAllProjects = true) is the deliberate exception and
+     * is reachable only from the admin GUI.
+     *
+     * @param \Laminas\Db\Sql\Select $select
+     * @param array $criteria
+     * @return void
+     */
+    protected function applyPhraseCriteria($select, array $criteria)
+    {
+        $where = new Where();
+        $where->equalTo('p.project', $this->config['project_name']);
+
+        if (isset($criteria['textDomain']) && '' !== $criteria['textDomain']) {
+            $where->equalTo('p.text_domain', $criteria['textDomain']);
+        }
+        if (isset($criteria['originRoute']) && '' !== $criteria['originRoute']) {
+            $where->equalTo('p.origin_route', $criteria['originRoute']);
+        }
+        if (isset($criteria['search']) && '' !== $criteria['search']) {
+            //Escaped by hand: laminas-db parameterizes the value but LIKE reads % and _
+            //out of the *value*, so an unescaped search for "100%" matches everything.
+            $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $criteria['search']);
+            $where->like('p.phrase', '%' . $escaped . '%');
+        }
+
+        //"Has no usable translation in this locale" — no row, or a row holding the
+        //empty string. Both exist in this table and both mean the same thing to a
+        //translator, so a filter that only tested for the missing row would hand an
+        //agent a list that silently omits the phrases someone blanked.
+        $translations = $this->config['translations_table_name'];
+        if (isset($criteria['untranslatedIn']) && '' !== $criteria['untranslatedIn']) {
+            $where->addPredicate(new \Laminas\Db\Sql\Predicate\Expression(
+                'NOT EXISTS (SELECT 1 FROM `' . $translations . '` tx'
+                . ' WHERE tx.translation_phrase_id = p.translation_phrase_id'
+                . ' AND tx.locale = ? AND tx.translation <> \'\')',
+                [$criteria['untranslatedIn']]
+            ));
+        }
+        if (isset($criteria['translatedIn']) && '' !== $criteria['translatedIn']) {
+            $where->addPredicate(new \Laminas\Db\Sql\Predicate\Expression(
+                'EXISTS (SELECT 1 FROM `' . $translations . '` tx'
+                . ' WHERE tx.translation_phrase_id = p.translation_phrase_id'
+                . ' AND tx.locale = ? AND tx.translation <> \'\')',
+                [$criteria['translatedIn']]
+            ));
+        }
+
+        $select->where($where);
     }
 
     /**
@@ -282,7 +568,19 @@ HAVING PhraseLocaleCount < ?";
      */
     public function updatePhrase($id, $data)
     {
-        $phrase = $this->getTranslations()[$id];
+        //getPhraseById(), not getTranslations()[$id]: the same record for this purpose
+        //— it carries the {locale}Id keys the write below steers by — for one phrase's
+        //worth of query instead of the project's. The security property is unchanged
+        //and is the reason this is a lookup at all: see the docblock above.
+        $phrase = $this->getPhraseById((int) $id);
+        if (null === $phrase) {
+            //Previously an "Undefined array key" warning followed by a null-dereference
+            //further down. An id this project has no phrase for is a caller error and
+            //has to say so, because the API is now a caller.
+            throw new \InvalidArgumentException(
+                'No phrase with id ' . (int) $id . ' belongs to this project.'
+            );
+        }
         $dateString = date_format((new \DateTime('now', new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
 
         $locales = array_keys($this->getLocales(true));
