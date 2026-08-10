@@ -13,8 +13,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
 
 use function count;
+use function implode;
 use function is_string;
-use function str_replace;
+use function sprintf;
 use function var_export;
 
 /**
@@ -115,10 +116,28 @@ final class MigrateCommand extends Command
         $io->writeln($this->runner->trackingTableSql() . ';');
         $io->writeln('');
 
+        $unpreviewable = [];
         foreach ($pending as $migration) {
             $io->writeln('-- ' . $migration->name() . ' — ' . $migration->describe());
-            foreach ($this->runner->preview($migration) as $statement) {
-                $io->writeln(str_replace("\n", "\n", $statement['sql']) . ';');
+
+            try {
+                $statements = $this->runner->preview($migration);
+            } catch (Throwable $e) {
+                //A data migration reads the schema to decide what is missing, so one
+                //that depends on an earlier schema migration cannot be previewed until
+                //that one has actually run — and previewing runs nothing. That is
+                //inherent, not a bug, and it is a two-pass procedure rather than a dead
+                //end. What must not happen is the whole printout being discarded
+                //because the *last* migration in the list could not be built: the
+                //operator needs the SQL for the ones that could.
+                $unpreviewable[] = $migration->name();
+                $io->writeln('-- CANNOT BE PREVIEWED YET: ' . $e->getMessage());
+                $io->writeln('');
+                continue;
+            }
+
+            foreach ($statements as $statement) {
+                $io->writeln($statement['sql'] . ';');
                 if ([] !== $statement['parameters']) {
                     $io->writeln('--   parameters: ' . var_export($statement['parameters'], true));
                 }
@@ -129,6 +148,16 @@ final class MigrateCommand extends Command
                 . "VALUES ('" . $migration->name() . "', UTC_TIMESTAMP());"
             );
             $io->writeln('');
+        }
+
+        if ([] !== $unpreviewable) {
+            $io->warning(sprintf(
+                "The SQL above is complete except for: %s\n\n"
+                . "Run everything printed above, record it with --mark-applied for each migration, then run "
+                . '--pretend again to get the rest. The second pass sees the schema the first one created, '
+                . 'which is exactly what it could not see this time.',
+                implode(', ', $unpreviewable)
+            ));
         }
 
         return self::SUCCESS;

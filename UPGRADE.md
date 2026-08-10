@@ -1,5 +1,126 @@
 # Upgrading
 
+## 2.0 → 2.1
+
+2.1 is a data-integrity release. It fixes a defect that had been silently
+multiplying rows for years, and it makes the recurrence impossible in the schema
+rather than in application memory.
+
+**It requires two migrations.** Nothing here works until they are applied:
+
+```
+bin/console jtranslate:migrate --status
+bin/console jtranslate:migrate            # or --pretend, where the app has no DDL rights
+```
+
+### The defect, because it explains every change below
+
+`trans_phrases.phrase` was `varchar(2000)`. Under the non-strict `sql_mode` these
+tables were created with, a longer phrase was **silently truncated on insert** —
+and from that moment the row could never be recognised again, because the render
+path hashes the *full* phrase and compares it against an index built from the
+*stored* one. The two can never match, so every render inserted another row.
+
+One row per pageview. On schoenstatt.link that produced 5,088 rows holding **two**
+distinct strings: 74% of the project's phrase table. On a modern engine the same
+phrase raises `Data too long for column 'phrase'` instead, so the bug did not go
+away when MariaDB started defaulting to `STRICT_TRANS_TABLES` — it changed from
+unbounded growth into an exception at end of request.
+
+### 1. `phrase` and `translation` are `TEXT`
+
+The truncating column is gone. There is no length limit on a phrase any more, and
+no length limit on its translation, which could not fit either.
+
+### 2. `trans_phrases` has a `phrase_hash` and a uniqueness constraint
+
+`BINARY(32)`, a SHA-256 of the phrase's raw bytes, under
+`UNIQUE (project, text_domain, phrase_hash)`.
+
+**Why a hash and not `UNIQUE (project, text_domain, phrase(255))`.** Two reasons,
+and the second is the one that is easy to miss. A prefix index truncates, and this
+data already contains two distinct 517- and 772-character German phrases sharing
+their first 255 characters. But more importantly, `phrase` is
+`utf8mb4_unicode_520_ci` — case-insensitive, accent-insensitive, PAD SPACE — so a
+`UNIQUE` index on it treats `Save`, `save` and `Save ` as one value while
+`Laminas\I18n\Translator` compares catalog keys byte for byte and treats them as
+three. Such an index **refuses genuinely distinct phrases**, silently and
+permanently. schoenstatt.link's table holds fourteen such pairs, including
+`Inglés`/`Inglês` — the Spanish and Portuguese names of English, in one text
+domain.
+
+Hash it yourself with `JTranslate\Model\PhraseIdentity`, never with `md5()` and
+never with SQL's `SHA2()`. Do not normalize the phrase first; the hash must
+identify the exact string the translator will use as its key.
+
+### 3. `getPhraseIndex()` changed shape again
+
+```diff
+-['Books' => ['d8436914a5b108a17874c374cc831de9' => true, ...]]   // md5(phrase)
++['Books' => ['720ab1f0…31 more bytes as hex' => false, ...]]     // sha256(phrase) => is retired
+```
+
+The value is now a **retirement flag**, not a bare `true`. `isset()` is still the
+membership test; the value tells a caller whether an existing row needs waking up.
+
+```diff
+-isset($index[$domain][md5($phrase)])
++isset($index[$domain][PhraseIdentity::hex($phrase)])
+```
+
+`PhraseCache::KEY_PHRASE_INDEX` is bumped to `jtranslate.phrase_index.2` to match.
+Reusing the key would have read every v1 `true` as "this phrase is retired".
+
+Two bugs were fixed here that a caller may have been relying on without knowing:
+
+- The method passed a `Sql` object to `TableGateway::select()`, which takes a
+  *predicate*. The gateway ignored it and ran `SELECT * FROM trans_phrases`, so
+  **neither the column list nor the project filter was ever applied** and the index
+  contained every project's phrases. If several applications share your table, this
+  index used to leak across them — and because it gates inserts, a phrase another
+  application had already recorded could never be added to yours.
+- The 9.9 MiB figure that justified hashing in 2.0 was measured across all projects
+  *and* across the duplicate rows. After this release the corpus is 75 KB.
+
+### 4. `retired_on`, and what replaces `deletePhrase()`
+
+A nullable `retired_on DATETIME`. A retired phrase disappears from the translator's
+worklist and from paged reads, **keeps its translations**, and **keeps compiling
+into the catalogs** so the site renders exactly what it rendered before. If a page
+renders it again and the translation is missing, the idempotent insert clears
+`retired_on` and it comes back intact.
+
+New: `TranslationsTable::retire()`, `unretire()`, and a `jtranslate:retire` console
+command. New criteria for `countPhrases()`/`getPhrasePage()`: `includeRetired`,
+`onlyRetired`, `originRouteLike`.
+
+Two limits, both real and both easy to expect too much of:
+
+- A phrase already translated in **every** configured locale will not wake itself.
+  The return path fires on `EVENT_MISSING_TRANSLATION`, which by design never fires
+  on a successful lookup. Use `--undo`.
+- Retiring from the CLI does not clear the **web server's** cache. APCu's segment
+  belongs to the SAPI that created it, so the running site keeps a phrase index
+  saying those rows are live and the return path is not armed until it expires.
+
+### 5. `existsPhrase()` and `deletePhrase()` are project-scoped
+
+They were not. `existsPhrase()` fetched by bare id and `deletePhrase()` is its only
+caller, so an administrator of one application could destroy another application's
+phrase — and cascade its translations away — by putting an integer in a URL. If you
+were calling `existsPhrase()` for a phrase outside your configured `project_name`,
+it now answers `false`.
+
+### 6. `getTranslations()` takes a second argument
+
+`getTranslations($fromAllProjects = false, $includeRetired = false)`. Retired
+phrases are excluded by default.
+
+### 7. `fetchSome()` refuses a `Sql` or `Select` object
+
+It always should have. Passing one returned the whole table instead of raising, and
+that is how the scoping bug in point 3 survived. It now throws.
+
 ## 1.x → 2.0
 
 2.0 is a transitional release. Its purpose is to make the library installable and
@@ -63,6 +184,12 @@ every request. As md5 hashes it is about 270 KiB, it caches, and membership is a
 `isset()` instead of an `in_array()` scan.
 
 If you read this array, hash your needle: `isset($index[$domain][md5($phrase)])`.
+
+> **Superseded by 2.1.** The shape changed again — sha256 hex keys, and the value
+> is a retirement flag rather than `true`. The 9.9 MiB and 1,494-character figures
+> above were both artifacts of the truncation defect 2.1 fixes: they counted 5,088
+> duplicate rows holding two strings, and they were measured across every project
+> sharing the table rather than one. The real corpus is 75 KB.
 
 ### 4. The cache service moved and changed type
 

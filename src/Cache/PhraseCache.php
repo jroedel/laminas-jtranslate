@@ -50,12 +50,20 @@ use function strlen;
 final class PhraseCache
 {
     /**
-     * Every phrase already in the database, as a per-domain set of hashes.
+     * Every phrase this project has, as domain => hex phrase hash => is retired.
      *
-     * @see \JTranslate\Model\TranslationsTable::getPhraseIndex() for why it is
-     *      hashed rather than stored whole.
+     * @see \JTranslate\Model\TranslationsTable::getPhraseIndex() for why it is hashed
+     *      rather than stored whole, and why the value is a flag rather than `true`.
+     *
+     * The `2` is a shape version, and it is doing real work here rather than being a
+     * cautious habit. The v1 item was `domain => md5 => true`; the v2 item is
+     * `domain => sha256hex => bool`. A deploy that reused the key would find v1 items
+     * still in a shared APCu segment and read every one of their `true` values as
+     * "this phrase is retired", so the render path would queue an un-retire for every
+     * phrase on every page until the TTL expired. Bumping the key makes the old item
+     * unreachable instead of misread.
      */
-    public const KEY_PHRASE_INDEX = 'jtranslate.phrase_index';
+    public const KEY_PHRASE_INDEX = 'jtranslate.phrase_index.2';
 
     /** The compiled text domain / locale / phrase => translation tree. */
     public const KEY_TRANSLATED_TEXT = 'jtranslate.translated_text';

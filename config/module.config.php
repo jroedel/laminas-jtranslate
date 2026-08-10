@@ -149,6 +149,7 @@ return [
         'commands' => [
             'jtranslate:migrate'          => Console\Command\MigrateCommand::class,
             'jtranslate:export-catalogs'  => Console\Command\ExportCatalogsCommand::class,
+            'jtranslate:retire'           => Console\Command\RetirePhrasesCommand::class,
         ],
     ],
     'service_manager' => [
@@ -168,6 +169,8 @@ return [
                 => Service\MigrateCommandFactory::class,
             Console\Command\ExportCatalogsCommand::class
                 => Service\ExportCatalogsCommandFactory::class,
+            Console\Command\RetirePhrasesCommand::class
+                => Service\RetirePhrasesCommandFactory::class,
         ],
         'aliases' => [
             'jtranslate_db_adapter' => Adapter::class,
