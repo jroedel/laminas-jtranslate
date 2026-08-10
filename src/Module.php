@@ -22,10 +22,28 @@ class Module implements BootstrapListenerInterface
         $app = $e->getTarget();
         $sm = $app->getServiceManager();
         $em = $app->getEventManager();
+
+        $config = $sm->get('JTranslate\Config');
+        //The text domain the navigation helper renders in, and the translator's fallback
+        //locale. Both were hardcoded — 'Application' and 'en_US' — which is wrong for any
+        //installation whose menu strings live elsewhere or whose source language is not
+        //English. They default to what was hardcoded, so nothing changes without being
+        //asked for.
+        //
+        //The navigation domain is *not* the dispatched module's namespace like every
+        //other helper below: the menu is one tree rendered on every page, so its strings
+        //belong to whichever domain owns the menu rather than to whatever controller
+        //happens to be answering.
+        $navigationTextDomain = $config['navigation_text_domain'] ?? 'Application';
+        $fallbackLocale       = $config['key_locale'] ?? 'en_US';
+
 //auto-set text domain for all view scripts
         $viewRenderer = $sm->get('ViewRenderer');
         $em->getSharedManager()
-        ->attach(AbstractActionController::class, 'dispatch', function ($e) use ($viewRenderer) {
+        ->attach(AbstractActionController::class, 'dispatch', function ($e) use (
+            $viewRenderer,
+            $navigationTextDomain
+        ) {
 
             $controller = $e->getTarget();
             $controllerClass = get_class($controller);
@@ -41,20 +59,25 @@ class Module implements BootstrapListenerInterface
             $viewRenderer->formRow()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->headTitle()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->flashMessenger()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->navigation()->setTranslatorTextDomain('Application');
-//@todo make this configurable
+            $viewRenderer->navigation()->setTranslatorTextDomain($navigationTextDomain);
         }, 100);
 //         try { //fail silently if we can't get a translator, or something else goes wrong, then log it.
             /** @var \Laminas\Mvc\I18n\Translator $translator */
             $translator = $sm->get('jtranslate_translator');
         $translator->enableEventManager();
         $translator->setLocale(\Locale::getDefault());
-        $translator->setFallbackLocale('en_US');
-//@todo make this a configurable value
+        //The key locale is the language the phrases themselves are written in, so it is
+        //by definition the only sensible fallback: a lookup that misses every catalog
+        //falls back to the text the phrase table is keyed by.
+        $translator->setFallbackLocale($fallbackLocale);
 
-            //attach the translator listener
-            $table = $sm->get(TranslationsTable::class);
-        $listener = new TranslatorEventListener($table, $table->getLocales());
+        //attach the translator listener.
+        //
+        //getLocales(TRUE) — the argument includes the key locale, without which an
+        //English page view can never discover a phrase. See the class docblock on
+        //TranslatorEventListener; App\Laminas\TranslatorConfigurator has to match.
+        $table    = $sm->get(TranslationsTable::class);
+        $listener = new TranslatorEventListener($table, $table->getLocales(true));
         $listener->attach($translator->getEventManager());
 //add patterns to the translator
             $manager        = $sm->get(ModuleManager::class);

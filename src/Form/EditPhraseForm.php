@@ -177,9 +177,17 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
             ],
         ];
         foreach (array_keys($this->locales) as $key) {
-        //An empty translation is how the editor says "leave this locale
-            //alone" — TranslationsTable::updatePhrase() skips falsy values — so
-            //empty is allowed and only the length is enforced.
+            //An empty translation is how the editor says "leave this locale alone",
+            //so empty is allowed and only the length is enforced.
+            //
+            //There is deliberately **no ToNull filter here, and there must never be
+            //one.** TranslationsTable::updatePhrase() reads an explicit null as
+            //"retract this translation" and deletes the row; `''` is what it reads as
+            //"leave alone". Every locale is rendered as a textarea on every edit, so a
+            //translator who fills in one language posts `''` for the other three — and
+            //a filter that turned those into null would delete three translations per
+            //save. StringTrim alone is what keeps the two meanings apart, which is why
+            //whitespace-only input arrives here as `''` and not as null.
             $specification[$key] = [
                 'required' => false,
                 'allow_empty' => true,
