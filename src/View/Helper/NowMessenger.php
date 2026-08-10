@@ -11,6 +11,7 @@
 namespace JTranslate\View\Helper;
 
 use JTranslate\Controller\Plugin\NowMessenger as PluginNowMessenger;
+use JTranslate\I18n\TranslatableMessage;
 use Laminas\ServiceManager\ServiceLocatorInterface;
 use Laminas\I18n\View\Helper\AbstractTranslatorHelper;
 use Laminas\View\Helper\EscapeHtml;
@@ -137,6 +138,19 @@ class NowMessenger extends AbstractTranslatorHelper
         $translator = $this->getTranslator();
         $translatorTextDomain = $this->getTranslatorTextDomain();
         $walk = function ($item) use (&$messagesToPrint, $escapeHtml, $autoEscape, $translator, $translatorTextDomain) {
+
+            //A message carrying data translates its template and interpolates
+            //afterwards, so the data never reaches translate() and never becomes a
+            //phrase. See JTranslate\I18n\TranslatableMessage.
+            if ($item instanceof TranslatableMessage) {
+                $messagesToPrint[] = $item->render(
+                    static fn(string $message, ?string $domain): string => null === $translator
+                        ? $message
+                        : $translator->translate($message, $domain ?? $translatorTextDomain),
+                    $autoEscape ? static fn(string $text): string => $escapeHtml($text) : null
+                );
+                return;
+            }
 
             if ($translator !== null) {
                 $item = $translator->translate($item, $translatorTextDomain);

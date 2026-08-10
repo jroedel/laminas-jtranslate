@@ -142,6 +142,23 @@ return [
             'flag'                  => View\Helper\Service\FlagFactory::class,
             'countryName'           => View\Helper\Service\CountryNameFactory::class,
             'nowMessenger'          => View\Helper\Service\NowMessengerFactory::class,
+            /**
+             * Replaces the laminas flash-messenger view helper with JTranslate's,
+             * which understands a TranslatableMessage — a message whose data is
+             * interpolated after translation rather than before, so the data never
+             * becomes a phrase.
+             *
+             * Keyed by the *parent's* service id rather than by an alias of our own,
+             * so all five of its aliases (`flashmessenger`, `flashMessenger`,
+             * `FlashMessenger`, the legacy Zend class name, and
+             * `laminasviewhelperflashmessenger`) resolve here. This depends on
+             * JTranslate loading after `Laminas\Mvc\Plugin\FlashMessenger` in
+             * config/modules.config.php; it does.
+             */
+            \Laminas\Mvc\Plugin\FlashMessenger\View\Helper\FlashMessenger::class
+                                    => View\Helper\Service\FlashMessengerFactory::class,
+            'laminasviewhelperflashmessenger'
+                                    => View\Helper\Service\FlashMessengerFactory::class,
         ],
         'invokables' => [
             'languageName'          => View\Helper\LanguageName::class,

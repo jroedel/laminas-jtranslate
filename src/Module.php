@@ -8,6 +8,7 @@ use JTranslate\Model\TranslationsTable;
 use Laminas\ModuleManager\ModuleManager;
 use Laminas\EventManager\EventInterface;
 use Laminas\ModuleManager\Feature\BootstrapListenerInterface;
+use Laminas\Validator\AbstractValidator;
 
 class Module implements BootstrapListenerInterface
 {
@@ -52,6 +53,13 @@ class Module implements BootstrapListenerInterface
             $viewRenderer->formLabel()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->formText()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->formElementErrors()->setTranslatorTextDomain($moduleNamespace);
+            //A validation message arrives here already interpolated — laminas
+            //substitutes %value%, %hostname% and friends inside the validator — so
+            //translating it now registers the *user's input* as a phrase. Six
+            //strangers' mistyped email hostnames reached the table that way. The
+            //templates are translated instead, by the default validator translator
+            //set below, which happens before interpolation.
+            $viewRenderer->formElementErrors()->setTranslateMessages(false);
             $viewRenderer->formInput()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->formButton()->setTranslatorTextDomain($moduleNamespace);
             $viewRenderer->formSelect()->setTranslatorTextDomain($moduleNamespace);
@@ -79,6 +87,20 @@ class Module implements BootstrapListenerInterface
         $table    = $sm->get(TranslationsTable::class);
         $listener = new TranslatorEventListener($table, $table->getLocales(true));
         $listener->attach($translator->getEventManager());
+
+        //Validator messages are translated as *templates*, before laminas fills in
+        //%value%/%hostname%/%min%. Without this the only translation happened at
+        //render time, on the finished string, so every distinct bad input became its
+        //own permanent phrase — unbounded, untranslatable, and in the email case a
+        //record of what a real person typed into a registration form. The renderers
+        //that used to do that translation are switched off in step with this: the
+        //formElementErrors line above, and App\Form\BootstrapFormRenderer on the
+        //Symfony side. Enabling one without the other translates twice.
+        //
+        //'default' is laminas' own default text domain and the right home: these
+        //strings come from the framework, not from a module, and are identical
+        //wherever they appear. App\Laminas\TranslatorConfigurator has to match.
+        AbstractValidator::setDefaultTranslator($translator, 'default');
 //add patterns to the translator
             $manager        = $sm->get(ModuleManager::class);
         $loadedModules  = $manager->getLoadedModules();
