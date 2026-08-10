@@ -46,6 +46,41 @@ use function sprintf;
  * Nullable, and it stays nullable: the GUI form has no such field and a write from a
  * human through `/admin/translations` must not be refused for lacking one.
  *
+ * ## The thread key is the phrase *hash*, not its id
+ *
+ * `KEY thread (project, phrase_hash, locale, history_id)` — the one lookup this table
+ * is for, and the reason it is not keyed on `translation_phrase_id`.
+ *
+ * A phrase id is not stable. M004 merges duplicate rows onto the lowest id and drops
+ * the rest; M005 merges again when normalization collapses two; `deletePhrase()` removes
+ * a row outright and the next render *rediscovers* the same English string as a new row
+ * with a new id. Every one of those is a routine event in this table's history, and each
+ * would silently cut a thread in half — leaving the earlier reasoning in the database,
+ * attached to an id nothing asks for again, at exactly the moment somebody is trying to
+ * find out why a translation keeps being changed back.
+ *
+ * The hash survives all of them, because it *is* the phrase: two rows with the same hash
+ * are the same string by definition, which is what M004's UNIQUE constraint means. So a
+ * rediscovered phrase inherits its own history, and a merge concatenates the histories of
+ * the rows it merged rather than orphaning all but one.
+ *
+ * `project` leads the key and is not negotiable: four projects share these tables and a
+ * phrase's text can be private to one of them.
+ *
+ * `text_domain` is stored but deliberately **not** in the key. The same string in
+ * `Schoenstatt` and in `default` is one string with one translation problem, and the
+ * table already treats it that way — it copies existing translations onto a new row when
+ * a phrase appears in a second domain. A thread that split by domain would show an agent
+ * half the argument.
+ *
+ * `translation_phrase_id` is kept, indexed, and is a back-reference rather than a key: it
+ * answers "which row was this, at the time" for anyone reconstructing events, and it
+ * costs one integer.
+ *
+ * One consequence to record: an identity change like M005's rewrites `phrase_hash` in
+ * `trans_phrases`, and any future one must rewrite it here too or every thread older than
+ * the migration disappears. M005 predates this table and had nothing to do.
+ *
  * ## No foreign key, deliberately
  *
  * Not to `trans_translations`, whose row may be gone by the time anyone reads this —
@@ -96,8 +131,11 @@ final class M006CreateTranslationHistory implements MigrationInterface
                     <<<SQL
                     CREATE TABLE IF NOT EXISTS `%s` (
                       `history_id` INT NOT NULL AUTO_INCREMENT,
-                      `translation_phrase_id` INT NOT NULL,
+                      `project` VARCHAR(50) NOT NULL,
+                      `phrase_hash` BINARY(32) NOT NULL,
                       `locale` VARCHAR(10) NOT NULL,
+                      `text_domain` VARCHAR(50) NOT NULL,
+                      `translation_phrase_id` INT NOT NULL,
                       `old_translation` TEXT NOT NULL,
                       `operation` VARCHAR(10) NOT NULL,
                       `notes` VARCHAR(255) NULL DEFAULT NULL,
@@ -106,7 +144,8 @@ final class M006CreateTranslationHistory implements MigrationInterface
                       `replaced_by` INT NULL DEFAULT NULL,
                       `replaced_on` DATETIME NOT NULL,
                       PRIMARY KEY (`history_id`),
-                      KEY `phrase_locale` (`translation_phrase_id`, `locale`, `history_id`)
+                      KEY `thread` (`project`, `phrase_hash`, `locale`, `history_id`),
+                      KEY `phrase` (`translation_phrase_id`, `history_id`)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
                     SQL,
                     $history

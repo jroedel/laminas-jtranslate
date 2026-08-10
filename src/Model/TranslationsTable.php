@@ -829,14 +829,24 @@ HAVING PhraseLocaleCount < ?";
 
         $note = null === $notes || '' === $notes ? null : mb_substr((string) $notes, 0, self::NOTE_LENGTH);
 
+        //Joined to `trans_phrases` so the row carries the thread key — project and
+        //phrase_hash — and not just the phrase id, which merges and rediscovery move.
+        //The *stored* hash, deliberately: the read below matches against the same column
+        //of the same table, so the two agree by construction rather than by both
+        //happening to call the same hash function.
         $sql = sprintf(
-            'INSERT INTO `%s` (`translation_phrase_id`, `locale`, `old_translation`, `operation`, '
+            'INSERT INTO `%s` (`project`, `phrase_hash`, `locale`, `text_domain`, '
+            . '`translation_phrase_id`, `old_translation`, `operation`, '
             . '`notes`, `written_by`, `written_on`, `replaced_by`, `replaced_on`) '
-            . 'SELECT t.`translation_phrase_id`, t.`locale`, t.`translation`, ?, ?, '
+            . 'SELECT p.`project`, p.`phrase_hash`, t.`locale`, p.`text_domain`, '
+            . 't.`translation_phrase_id`, t.`translation`, ?, ?, '
             . 't.`modified_by`, t.`modified_on`, ?, ? '
-            . 'FROM `%s` t WHERE t.`translation_id` = ?',
+            . 'FROM `%s` t '
+            . 'INNER JOIN `%s` p ON p.`translation_phrase_id` = t.`translation_phrase_id` '
+            . 'WHERE t.`translation_id` = ?',
             $history,
-            $this->config['translations_table_name']
+            $this->config['translations_table_name'],
+            $this->config['phrases_table_name']
         );
         $this->adapter->query($sql, [$operation, $note, $actingUserId, $now, $translationId]);
     }
@@ -847,27 +857,58 @@ HAVING PhraseLocaleCount < ?";
      * Project-scoped through the phrase, like every other read here: three other
      * projects share these tables and an id in a URL must not reach across.
      *
-     * @param int $phraseId
+     * Keyed on the phrase *hash*, so the thread survives everything that moves a phrase
+     * id — M004's and M005's merges, and a `deletePhrase()` followed by the next render
+     * rediscovering the same string as a new row. See M006CreateTranslationHistory.
+     *
+     * Every text domain the string appears in, deliberately: the same English string in
+     * `Schoenstatt` and `default` is one translation problem, and splitting the thread by
+     * domain would show half the argument.
+     *
+     * @param int $phraseId any live row of the string; only its hash is used
+     * @param string|null $locale one language's thread, or null for all of them
      * @return list<array<string, mixed>> empty when the phrase is not this project's,
      *         so a caller cannot use this to learn that some other project has one
      */
-    public function getTranslationHistory($phraseId)
+    public function getTranslationHistory($phraseId, $locale = null)
     {
         $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
-        if (! $this->existsPhrase((int) $phraseId)) {
+
+        //Resolved to the phrase's hash, which is the thread key — see
+        //M006CreateTranslationHistory on why the id is not. This lookup is also the
+        //project scope: an id belonging to another project resolves to nothing, so the
+        //answer is an empty thread rather than somebody else's.
+        $sql = sprintf(
+            'SELECT `project`, `phrase_hash` FROM `%s` WHERE `translation_phrase_id` = ? AND `project` = ?',
+            $this->config['phrases_table_name']
+        );
+        $phrase = $this->adapter->query($sql, [(int) $phraseId, $this->config['project_name']])->current();
+        if (! is_array($phrase) && ! $phrase instanceof \ArrayObject) {
             return [];
         }
+        $phrase = (array) $phrase;
 
+        $parameters = [$phrase['project'], $phrase['phrase_hash']];
+        $where      = 'h.`project` = ? AND h.`phrase_hash` = ?';
+        if (null !== $locale && '' !== $locale) {
+            $where       .= ' AND h.`locale` = ?';
+            $parameters[] = $locale;
+        }
+
+        //`history_id` descending, not `replaced_on`: two writes inside the same second
+        //are ordinary in a batch, and a timestamp cannot order them. The id can, and
+        //an append-only table's id order *is* its event order.
         $sql = sprintf(
-            'SELECT h.`history_id`, h.`locale`, h.`old_translation`, h.`operation`, h.`notes`, '
+            'SELECT h.`history_id`, h.`locale`, h.`text_domain`, h.`translation_phrase_id`, '
+            . 'h.`old_translation`, h.`operation`, h.`notes`, '
             . 'h.`written_by`, h.`written_on`, h.`replaced_by`, h.`replaced_on` '
-            . 'FROM `%s` h WHERE h.`translation_phrase_id` = ? '
-            . 'ORDER BY h.`history_id` DESC',
-            $history
+            . 'FROM `%s` h WHERE %s ORDER BY h.`history_id` DESC',
+            $history,
+            $where
         );
 
         $rows = [];
-        foreach ($this->adapter->query($sql, [(int) $phraseId]) as $row) {
+        foreach ($this->adapter->query($sql, $parameters) as $row) {
             $rows[] = (array) $row;
         }
 
