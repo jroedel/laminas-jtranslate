@@ -130,7 +130,9 @@ Everything lives under the `jtranslate` key.
 | --- | --- |
 | `project_name` | **Required.** Several applications may share one phrase table; this string is what separates them. |
 | `phrases_table_name` / `translations_table_name` | default `trans_phrases` / `trans_translations` |
-| `key_locale` | the locale the phrase itself is written in, default `en_US` |
+| `key_locale` | the locale the phrase itself is written in, default `en_US`. Also the translator's fallback locale, and the language `CountriesInfo` falls back to |
+| `catalog_file_pattern` | the compiled catalog filename, `%s` being the locale; default `%s.lang.php`. Must agree with the `translator.translation_file_patterns` pattern — this key controls the writing, that one the reading |
+| `navigation_text_domain` | the text domain the navigation helper renders in, default `Application`. Unlike every other view helper the menu is *not* translated in the dispatched controller's namespace: it is one tree shown on every page, so its strings belong to whichever domain owns the menu |
 | `locales_to_translate` | the locales the GUI offers. Merged additively by Laminas' config merger, so a numeric-keyed list in application config **appends to** the module's defaults rather than replacing them. |
 | `root_directory` | where compiled catalogs are written, default `getcwd()` |
 | `cache_options` | a Laminas cache storage configuration |
@@ -144,8 +146,14 @@ Everything lives under the `jtranslate` key.
 2. On dispatch the text domain is set to the controller's root namespace, so a
    module's translations stay with the module.
 3. A missing translation raises the translator's event;
-   `TranslationsTable::reportMissingTranslation()` records it in memory.
-4. At the end of the request `flush()` writes the new phrases to the database.
+   `TranslationsTable::reportMissingTranslation()` records it in memory —
+   **in every configured locale including the key locale**, which is what makes
+   discovery independent of which language a visitor happens to be browsing in. See
+   `TranslatorEventListener`; a miss in an unconfigured locale is still ignored, because
+   `Accept-Language` can ask for anything.
+4. At the end of the request `flush()` writes the new phrases to the database, one
+   transaction per phrase, so a failure can never leave a phrase row without the
+   key-locale translation that makes it usable.
 5. When a translator saves a phrase in the GUI, the affected catalogs are
    recompiled.
 

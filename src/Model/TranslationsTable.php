@@ -103,7 +103,18 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      */
     protected $rootDirectory;
 
-    protected $filePattern = '%s.lang.php'; //@todo make this configurable
+    /**
+     * The compiled catalog filename, with `%s` standing in for the locale.
+     *
+     * Configurable through `jtranslate.catalog_file_pattern`, defaulting to what it has
+     * always been. It has to agree with the `translation_file_patterns` the translator is
+     * configured with — this side writes the files and that side reads them — so an
+     * installation changing it must change both, which is why it is one key rather than
+     * an argument to writePhpTranslationArrays().
+     *
+     * @var string $filePattern
+     */
+    protected $filePattern = '%s.lang.php';
 
     /**
      * There is no event manager parameter and no framework type in this signature.
@@ -127,7 +138,11 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      * @param ActingUserProviderInterface|null $actingUserProvider
      * @param UserDirectoryInterface|null $userTable
      * @param string $rootDirectory
-     * @todo throw error if no project_name config key exists
+     * @throws \RuntimeException when `project_name` is missing or empty. Every read and
+     *         write in this class scopes by it, and this table is shared between the
+     *         applications using this library — so a missing value would not degrade
+     *         gracefully, it would silently address another project's rows. M002 has
+     *         refused to run without it since it was written; the model now agrees.
      */
     public function __construct(
         $phrasesGateway,
@@ -138,6 +153,14 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
         $userTable,
         $rootDirectory
     ) {
+        if (! isset($config['project_name']) || '' === $config['project_name']) {
+            throw new \RuntimeException(
+                'jtranslate.project_name is not configured, so there is no project to read or write phrases '
+                . 'for. Several applications may share one phrase table and this string is what separates '
+                . 'them; defaulting it would mean reading and writing another project\'s rows.'
+            );
+        }
+
         $this->phrasesGateway       = $phrasesGateway;
         $this->translationsGateway  = $translationsGateway;
         $this->adapter              = $phrasesGateway->getAdapter();
@@ -146,6 +169,10 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
         $this->actingUserProvider   = $actingUserProvider;
         $this->userTable            = $userTable;
         $this->newMissingPhrases    = [];
+
+        if (isset($config['catalog_file_pattern']) && '' !== $config['catalog_file_pattern']) {
+            $this->filePattern = (string) $config['catalog_file_pattern'];
+        }
 
         $this->setRootDirectory($rootDirectory);
     }
@@ -608,8 +635,35 @@ HAVING PhraseLocaleCount < ?";
      * the INSERT branch, which took $data['phraseId'] for a value the caller
      * was authorized for exactly once, in the controller, by loose comparison.
      *
+     * ## Three distinct submissions, and why `''` is not one of them
+     *
+     * A locale in $data can mean three things, and the difference matters because two
+     * of the callers are a browser form and an HTTP API with opposite conventions:
+     *
+     * - **absent, or the empty string** — "leave this locale alone". This is the web
+     *   form's meaning and it is not negotiable: every locale is rendered as a textarea
+     *   on every edit, so an untouched form posts `''` for every language the translator
+     *   did not fill in. If `''` meant "clear", opening a phrase and saving one language
+     *   would wipe the other three. That is the single most destructive thing this method
+     *   could plausibly be made to do.
+     * - **an explicit null** — "retract this translation". Deletes the row. Reachable
+     *   from an API caller, which can distinguish a JSON `null` from `""`, and from
+     *   nothing a browser can post. Deleting rather than storing `''` keeps one
+     *   representation of "untranslated" in the table instead of two; `untranslatedIn`
+     *   already has to test for both because older code created blanks.
+     * - **any other string** — write it. Including `'0'`, which the old condition
+     *   (`! $data[$key]`) silently discarded along with `''`, because both are falsy in
+     *   PHP. A translation of literally "0" is legitimate — it is a plausible rendering
+     *   of a label in any language — and it could not be saved.
+     *
+     * The old code collapsed the first and third cases into a single falsy test, so
+     * there was no way to express retraction at all and `'0'` was unsaveable.
+     * `PhrasesV3Controller` documented the quirk and mirrored it deliberately so its
+     * `changed` field would not lie; that mirror is now removed there in step with this.
+     *
      * @param int $id
-     * @param array $data
+     * @param array $data locale => string to write, null to retract; absent or '' to
+     *        leave alone
      * @return array
      */
     public function updatePhrase($id, $data)
@@ -631,21 +685,49 @@ HAVING PhraseLocaleCount < ?";
 
         $locales = array_keys($this->getLocales(true));
         $results = [];
+        //Resolved once, before the first write, for the reason set out on
+        //writeMissingPhrasesToDb(): the configured provider can raise rather than answer,
+        //and a provider that raises between two of the writes below leaves a phrase
+        //half-edited.
+        $actingUserId = $this->getActingUserId();
         foreach ($locales as $key) {
-            if (
-                ! isset($data[$key]) || ! $data[$key] ||
-                (isset($phrase[$key]) && $data[$key] === $phrase[$key])
-            ) { //in the case that they didn't write anything, continue
+            //"Leave this locale alone": not submitted at all, or submitted as the empty
+            //string, which is what an untouched textarea posts. See the docblock — this
+            //is the case that must never delete anything.
+            if (! array_key_exists($key, $data) || '' === $data[$key]) {
                 continue;
             }
-            if (isset($phrase[$key . 'Id']) && $phrase[$key . 'Id']) { //this locale already has a row for this phrase
+
+            $hasRow = isset($phrase[$key . 'Id']) && $phrase[$key . 'Id'];
+
+            //"Retract this translation." Only an explicit null means this, so no browser
+            //can reach it. Deleted rather than blanked so that "untranslated" has one
+            //representation in the table.
+            if (null === $data[$key]) {
+                if (! $hasRow) {
+                    continue;
+                }
+                $sql    = new Sql($this->adapter);
+                $delete = $sql->delete($this->config['translations_table_name'])
+                    ->where(['translation_id' => $phrase[$key . 'Id']]);
+                $results[] = $sql->prepareStatementForSqlObject($delete)->execute();
+                continue;
+            }
+
+            //Strict comparison against what is stored, so submitting the text that is
+            //already there is not a write. Both sides are strings here.
+            if (isset($phrase[$key]) && (string) $data[$key] === (string) $phrase[$key]) {
+                continue;
+            }
+
+            if ($hasRow) {
                 //update don't insert
                 $sql = new Sql($this->adapter);
                 $update = $sql->update($this->config['translations_table_name'])
                     ->set([
                         'translation' => $data[$key],
                         'modified_on' => $dateString,
-                        'modified_by' => $this->getActingUserId(),
+                        'modified_by' => $actingUserId,
                     ])
                     ->where(['translation_id' => $phrase[$key . 'Id']]);
                 $statement = $sql->prepareStatementForSqlObject($update);
@@ -659,7 +741,7 @@ HAVING PhraseLocaleCount < ?";
                     'locale' => $key,
                     'translation' => $data[$key],
                     'modified_on' => $dateString,
-                    'modified_by' => $this->getActingUserId(),
+                    'modified_by' => $actingUserId,
                 ]);
                 $statement = $sql->prepareStatementForSqlObject($insert);
                 $results[] = $statement->execute();
@@ -1288,6 +1370,22 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         $dateString = date_format((new \DateTime('now', new \DateTimeZone('UTC'))), 'Y-m-d H:i:s');
         $translations = $this->getTranslations(true);
 
+        //Resolved once, here, and deliberately *before* the first INSERT.
+        //
+        //This used to be called from inside the loop, twice, which made a throwing
+        //provider a mid-write failure rather than a pre-write one. In this application
+        //the configured provider reaches for the host's session, so in a console
+        //process it does not merely return null — building it raises. The phrase row
+        //had already been inserted by then, the exception escaped before its key-locale
+        //translation row was, and because the phrase index reports the phrase *present*
+        //no later render ever completed it: a permanently untranslatable row, created by
+        //a failure that looked like it had done nothing. Observed 2026-08-10.
+        //
+        //Hoisting it is the cheap half of the fix and it is the half that generalises:
+        //whatever the provider does, it now happens while there is nothing to leave
+        //half-written. The transaction below covers everything else.
+        $actingUserId = $this->getActingUserId();
+
         $localesToSearch = $this->config['locales_to_translate'];
         if (! in_array($this->config['key_locale'], $localesToSearch)) {
             $localesToSearch[] = $this->config['key_locale'];
@@ -1296,119 +1394,145 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         //if we find something, we'll have to write the php arrays
         $weFoundAPreviousMatch = false;
         $result = [];
+        $connection = $this->adapter->getDriver()->getConnection();
         foreach ($this->newMissingPhrases as $textDomain => $phrases) {
             foreach ($phrases as $phrase) {
                 if (! isset($phrase)) {
                     continue;
                 }
-                //Idempotent, and the un-retire branch in one statement.
+                //One transaction per phrase, not one for the whole flush.
                 //
-                //Written by hand because laminas-db's Sql\Insert cannot express ON
-                //DUPLICATE KEY UPDATE, and this clause is doing three separate jobs:
+                //A phrase row and its key-locale translation are a unit: the row alone
+                //is worse than nothing, because the phrase index will report it present
+                //and nothing will ever finish it. Per-phrase rather than per-flush so
+                //that one unwritable phrase does not discard the others that were
+                //discovered in the same request.
                 //
-                //- it makes a stale or evicted phrase index harmless. Before the
-                //  UNIQUE constraint existed, a cache miss on a phrase that was in
-                //  fact present inserted a second row, and nothing anywhere refused
-                //  it. That is now a no-op instead of a duplicate.
-                //- it clears `retired_on`, which is how a phrase that was retired and
-                //  turns out to still be in use comes back with its translations
-                //  intact. See reportMissingTranslation().
-                //- `LAST_INSERT_ID(translation_phrase_id)` is what makes
-                //  getGeneratedValue() answer with the *existing* row's id on the
-                //  duplicate branch. Without it MySQL reports 0 there, and the
-                //  translation rows below would be attached to phrase 0.
-                //
-                //`origin_route` is deliberately not updated: it records where a phrase
-                //was first seen, and overwriting it on every subsequent sighting would
-                //turn the only context a translator gets into "wherever it was
-                //rendered most recently", which is both less useful and less true.
-                $sql = sprintf(
-                    'INSERT INTO `%s` (`project`, `text_domain`, `phrase`, `phrase_hash`, `added_on`, '
-                    . '`origin_route`) VALUES (?, ?, ?, ?, ?, ?) '
-                    . 'ON DUPLICATE KEY UPDATE `retired_on` = NULL, '
-                    . '`translation_phrase_id` = LAST_INSERT_ID(`translation_phrase_id`)',
-                    $this->config['phrases_table_name']
-                );
-                $lastResult = $this->adapter->query($sql, [
-                    $this->config['project_name'],
-                    $textDomain,
-                    $phrase,
-                    PhraseIdentity::raw($phrase),
-                    $dateString,
-                    $routeName,
-                ]);
-                $phrasesKeyId = $lastResult->getGeneratedValue();
-                $result[] = $lastResult;
+                //laminas-db counts nested transactions, so this is safe when the caller
+                //already opened one — a nested begin/commit pair only adjusts the
+                //counter. A nested *rollback* does discard the outer transaction too,
+                //which is heavy-handed but never unsafe: the alternative is committing a
+                //half-written phrase.
+                $connection->beginTransaction();
+                try {
+                    //Idempotent, and the un-retire branch in one statement.
+                    //
+                    //Written by hand because laminas-db's Sql\Insert cannot express ON
+                    //DUPLICATE KEY UPDATE, and this clause is doing three separate jobs:
+                    //
+                    //- it makes a stale or evicted phrase index harmless. Before the
+                    //  UNIQUE constraint existed, a cache miss on a phrase that was in
+                    //  fact present inserted a second row, and nothing anywhere refused
+                    //  it. That is now a no-op instead of a duplicate.
+                    //- it clears `retired_on`, which is how a phrase that was retired and
+                    //  turns out to still be in use comes back with its translations
+                    //  intact. See reportMissingTranslation().
+                    //- `LAST_INSERT_ID(translation_phrase_id)` is what makes
+                    //  getGeneratedValue() answer with the *existing* row's id on the
+                    //  duplicate branch. Without it MySQL reports 0 there, and the
+                    //  translation rows below would be attached to phrase 0.
+                    //
+                    //`origin_route` is deliberately not updated: it records where a phrase
+                    //was first seen, and overwriting it on every subsequent sighting would
+                    //turn the only context a translator gets into "wherever it was
+                    //rendered most recently", which is both less useful and less true.
+                    $sql = sprintf(
+                        'INSERT INTO `%s` (`project`, `text_domain`, `phrase`, `phrase_hash`, `added_on`, '
+                        . '`origin_route`) VALUES (?, ?, ?, ?, ?, ?) '
+                        . 'ON DUPLICATE KEY UPDATE `retired_on` = NULL, '
+                        . '`translation_phrase_id` = LAST_INSERT_ID(`translation_phrase_id`)',
+                        $this->config['phrases_table_name']
+                    );
+                    $lastResult = $this->adapter->query($sql, [
+                        $this->config['project_name'],
+                        $textDomain,
+                        $phrase,
+                        PhraseIdentity::raw($phrase),
+                        $dateString,
+                        $routeName,
+                    ]);
+                    $phrasesKeyId = $lastResult->getGeneratedValue();
+                    $result[] = $lastResult;
 
-                //see if we have a matching phrase in another text domain
-                $translationsToInsert = [];
-                foreach ($translations as $translationPhrase) {
-                    if (0 === strcmp($translationPhrase['phrase'], $phrase)) { //we found a matching existing phrase
-                        foreach ($localesToSearch as $locale) {
-                            //we found a phrase-locale match
-                            if (
-                                isset($translationPhrase[$locale])
-                                && 0 !== strlen($translationPhrase[$locale])
-                            ) {
-                                //take the first translation found; there is no way to rank them
-                                if (! isset($translationsToInsert[$locale])) {
-                                    $weFoundAPreviousMatch = true;
-                                    $translationsToInsert[$locale] = [
-                                        'translation_phrase_id' => $phrasesKeyId,
-                                        'locale' => $locale,
-                                        'translation' => $translationPhrase[$locale],
-                                        'modified_by' => (isset($translationPhrase[$locale . 'ModifiedBy']) &&
-                                            isset($translationPhrase[$locale . 'ModifiedBy']['userId'])) ?
-                                            $translationPhrase[$locale . 'ModifiedBy']['userId'] :
-                                            $this->getActingUserId(),
-                                        'modified_on' => $dateString,
-                                    ];
+                    //see if we have a matching phrase in another text domain
+                    $translationsToInsert = [];
+                    foreach ($translations as $translationPhrase) {
+                        if (0 === strcmp($translationPhrase['phrase'], $phrase)) { //we found a matching existing phrase
+                            foreach ($localesToSearch as $locale) {
+                                //we found a phrase-locale match
+                                if (
+                                    isset($translationPhrase[$locale])
+                                    && 0 !== strlen($translationPhrase[$locale])
+                                ) {
+                                    //take the first translation found; there is no way to rank them
+                                    if (! isset($translationsToInsert[$locale])) {
+                                        $weFoundAPreviousMatch = true;
+                                        $translationsToInsert[$locale] = [
+                                            'translation_phrase_id' => $phrasesKeyId,
+                                            'locale' => $locale,
+                                            'translation' => $translationPhrase[$locale],
+                                            'modified_by' => (isset($translationPhrase[$locale . 'ModifiedBy']) &&
+                                                isset($translationPhrase[$locale . 'ModifiedBy']['userId'])) ?
+                                                $translationPhrase[$locale . 'ModifiedBy']['userId'] :
+                                                $actingUserId,
+                                            'modified_on' => $dateString,
+                                        ];
+                                    }
                                 }
                             }
-                        }
-                        if (
-                            // we have all the translations we need
-                            count($translationsToInsert) === count($localesToSearch)
-                        ) {
-                            continue;
+                            if (
+                                // we have all the translations we need
+                                count($translationsToInsert) === count($localesToSearch)
+                            ) {
+                                continue;
+                            }
                         }
                     }
-                }
 
-                //auto insert into translations table for the key locale
-                if (! isset($translationsToInsert[$this->config['key_locale']])) {
-                    $translationsToInsert[$this->config['key_locale']] = [
-                        'translation_phrase_id' => $phrasesKeyId,
-                        'locale' => $this->config['key_locale'],
-                        'translation' => $phrase,
-                        'modified_by' => $this->getActingUserId(),
-                        'modified_on' => $dateString,
-                    ];
-                }
+                    //auto insert into translations table for the key locale
+                    if (! isset($translationsToInsert[$this->config['key_locale']])) {
+                        $translationsToInsert[$this->config['key_locale']] = [
+                            'translation_phrase_id' => $phrasesKeyId,
+                            'locale' => $this->config['key_locale'],
+                            'translation' => $phrase,
+                            'modified_by' => $actingUserId,
+                            'modified_on' => $dateString,
+                        ];
+                    }
 
-                //insert rows
-                //
-                //The no-op ON DUPLICATE clause exists for the un-retire branch above:
-                //a phrase coming back from retirement already has its translations,
-                //and `UNIQUE (translation_phrase_id, locale)` would otherwise make
-                //this statement throw. Assigning a column to itself is the spelling
-                //that means "leave the stored row exactly as it is" — which is the
-                //required behaviour, because the stored row is a translator's work and
-                //the value computed here is a guess derived from another text domain.
-                foreach ($translationsToInsert as $row) {
-                    $sql = sprintf(
-                        'INSERT INTO `%s` (`translation_phrase_id`, `locale`, `translation`, `modified_by`, '
-                        . '`modified_on`) VALUES (?, ?, ?, ?, ?) '
-                        . 'ON DUPLICATE KEY UPDATE `translation` = `translation`',
-                        $this->config['translations_table_name']
-                    );
-                    $result[] = $this->adapter->query($sql, [
-                        $row['translation_phrase_id'],
-                        $row['locale'],
-                        $row['translation'],
-                        $row['modified_by'],
-                        $row['modified_on'],
-                    ]);
+                    //insert rows
+                    //
+                    //The no-op ON DUPLICATE clause exists for the un-retire branch above:
+                    //a phrase coming back from retirement already has its translations,
+                    //and `UNIQUE (translation_phrase_id, locale)` would otherwise make
+                    //this statement throw. Assigning a column to itself is the spelling
+                    //that means "leave the stored row exactly as it is" — which is the
+                    //required behaviour, because the stored row is a translator's work and
+                    //the value computed here is a guess derived from another text domain.
+                    foreach ($translationsToInsert as $row) {
+                        $sql = sprintf(
+                            'INSERT INTO `%s` (`translation_phrase_id`, `locale`, `translation`, `modified_by`, '
+                            . '`modified_on`) VALUES (?, ?, ?, ?, ?) '
+                            . 'ON DUPLICATE KEY UPDATE `translation` = `translation`',
+                            $this->config['translations_table_name']
+                        );
+                        $result[] = $this->adapter->query($sql, [
+                            $row['translation_phrase_id'],
+                            $row['locale'],
+                            $row['translation'],
+                            $row['modified_by'],
+                            $row['modified_on'],
+                        ]);
+                    }
+                    $connection->commit();
+                } catch (\Throwable $e) {
+                    //Rolled back and rethrown, not swallowed. A phrase that cannot be
+                    //recorded is worth knowing about — the caller decides whether it is
+                    //fatal, and flush()'s laminas caller already treats an exception
+                    //here as a page failure. What this guarantees is only that the
+                    //database is left as it was, so the next request can try again.
+                    $connection->rollback();
+                    throw $e;
                 }
             }
         }

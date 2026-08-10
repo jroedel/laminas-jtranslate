@@ -1,5 +1,113 @@
 # Upgrading
 
+## 2.1 → 2.2
+
+Behaviour fixes. Nothing here needs a migration, but three of them change what the
+library *does* and one of those changes what a save can destroy — read 2 and 3 before
+upgrading.
+
+### 1. An English page view now discovers phrases
+
+`TranslatorEventListener` must be constructed with `getLocales(**true**)`. Both
+wiring sites in a host application need it:
+
+```diff
+-new TranslatorEventListener($table, $table->getLocales())
++new TranslatorEventListener($table, $table->getLocales(true))
+```
+
+`getLocales()` omits the **key** locale, so a miss in it was ignored — and since the
+listener is the only path by which a phrase ever enters `trans_phrases`, a string that
+appeared only on key-locale pages was never recorded and therefore never translatable.
+The "a deleted phrase comes back the next time a page renders it" property held only
+for visitors browsing in a *translated* locale.
+
+Steady-state cost is nil: every phrase in the database has an auto-inserted key-locale
+translation, so the compiled catalog already has it and no event fires. Expect a bounded
+one-off burst of inserts after upgrading — the strings that were being dropped — then
+silence.
+
+### 2. `updatePhrase()` distinguishes "leave alone" from "retract"
+
+| submitted | before | now |
+| --- | --- | --- |
+| absent | leave alone | leave alone |
+| `''` | leave alone | leave alone |
+| `'0'` | **leave alone** | **written** |
+| `null` | leave alone | **row deleted** |
+
+`''` still means "leave this locale alone", and that is not negotiable: the web form
+renders every locale as a textarea on every edit, so an untouched form posts `''` for
+every language the translator did not fill in. If `''` meant "clear", saving one language
+would wipe the others.
+
+**If you add a `ToNull` filter to a translation input, you will delete translations.**
+`EditPhraseForm` deliberately has only `StringTrim`, which is what keeps `''` and `null`
+apart. A host application with its own form must do the same.
+
+`'0'` was silently unsaveable because it is falsy in PHP. Any caller that mirrored that
+quirk — filtering falsy values before deciding what changed — should now filter only `''`.
+
+### 3. Discovery is transactional, and the acting user is resolved first
+
+`writeMissingPhrasesToDb()` wraps each phrase and its key-locale translation in one
+transaction, and asks for the acting user id *before* the first insert.
+
+The failure this closes was partial rather than clean: the phrase row was inserted, the
+acting-user lookup raised, and the exception escaped before the translation row was
+written. Because `getPhraseIndex()` then reported the phrase *present*, no later render
+ever completed it — a permanently untranslatable row produced by a failure that looked
+like it had done nothing.
+
+laminas-db counts nested transactions, so a caller that already opened one is fine. Note
+that a nested *rollback* discards the outer transaction too; that is laminas-db's
+behaviour, not a choice made here.
+
+A host application should also make its `ActingUserProviderInterface` answer `null`
+rather than raise when there is no session — see JUser's
+`AuthServiceActingUserProvider`. `TranslationsTable::setActingUserId()` remains the way a
+caller with a known identity and no session (an API request) attributes its writes.
+
+### 4. Two new config keys, both defaulting to previous behaviour
+
+| key | default | was |
+| --- | --- | --- |
+| `catalog_file_pattern` | `'%s.lang.php'` | hardcoded in the model |
+| `navigation_text_domain` | `'Application'` | hardcoded in `Module::onBootstrap()` |
+
+The translator's fallback locale now follows `key_locale` instead of being hardcoded to
+`en_US` — correct by definition, since the key locale is the language the phrases are
+written in.
+
+### 5. `CountriesInfo` takes the locales it should answer for
+
+```diff
+-new CountriesInfo($countries)
++new CountriesInfo($countries, $locales)
+```
+
+Defaults to `['en_US']` if omitted, **not** to the five locales the method used to
+hardcode — a caller that has not been updated gets English rather than translations for
+languages it never configured. `CountriesFactory` reads them from `jtranslate` config.
+
+Two bugs fell out of this. A configured locale the vendored data cannot translate now
+gets a key holding the English name, instead of being absent. And Scotland — built by
+cloning `GB` — no longer inherits the United Kingdom's name in every language that was
+not explicitly overridden; it read "Regno Unito" in Italian.
+
+### 6. `TranslationsTable` throws without `project_name`
+
+It always required one; every read and write scopes by it, and the table is shared
+between applications, so a missing value would address another project's rows rather than
+degrade. `M002` has refused to run without it since it was written.
+
+### 7. The `jtranslate/clear-cache` route is gone
+
+It declared `'action' => 'clearCache'` and `JTranslateController` has never had a
+`clearCacheAction()`, so reaching `/admin/translations/clear-cache` was a guaranteed
+dispatch failure. It carried no authorization guard either, which is the only reason
+nobody hit it. Remove any guard entry naming it.
+
 ## 2.0 → 2.1
 
 2.1 is a data-integrity release. It fixes a defect that had been silently

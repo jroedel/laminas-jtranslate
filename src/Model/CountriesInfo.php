@@ -42,10 +42,55 @@ class CountriesInfo
     protected $countries;
     protected $namesCache;
     protected $translationsCache;
+
+    /**
+     * The locales getCountryNameTranslations() answers for.
+     *
+     * @var string[] $locales
+     */
+    protected $locales;
+
+    /**
+     * ISO 639-1 language subtag => the ISO 639-3 key `countries.json` uses.
+     *
+     * Exactly the thirteen languages the vendored file carries, and no more — verified
+     * against the data rather than copied from a standard, because a key that is not in
+     * the file would silently fall back to English while looking supported.
+     *
+     * Static on purpose. This is a fact about ISO codes and about the vendored data, not
+     * about any installation, and nothing in ext-intl maps 639-1 to 639-3. What is *not*
+     * static any more is the locale list — see getCountryNameTranslations().
+     */
+    private const LANGUAGE_KEYS = [
+        'cy' => 'cym',
+        'de' => 'deu',
+        'fi' => 'fin',
+        'fr' => 'fra',
+        'hr' => 'hrv',
+        'it' => 'ita',
+        'ja' => 'jpn',
+        'nl' => 'nld',
+        'pt' => 'por',
+        'ru' => 'rus',
+        'es' => 'spa',
+        'sk' => 'svk',
+        'zh' => 'zho',
+    ];
+
     public const COUNTRY_NAME_COMMON = 'common';
     public const COUNTRY_NAME_OFFICIAL = 'official';
-    public function __construct($countries)
+
+    /**
+     * @param array<\stdClass> $countries
+     * @param string[] $locales every locale the installation wants country names in,
+     *        including its key locale. Defaults to `['en_US']` rather than to the old
+     *        hardcoded five, so a caller that has not been updated gets English — which
+     *        is correct, if minimal — instead of translations for languages it never
+     *        configured.
+     */
+    public function __construct($countries, array $locales = ['en_US'])
     {
+        $this->locales = [] === $locales ? ['en_US'] : $locales;
         //key array
         $return = [];
         foreach ($countries as $obj) {
@@ -63,6 +108,20 @@ class CountriesInfo
         $scotland->cca3 = '';
         $scotland->cioc = '';
         $scotland->capital = 'Edinburgh';
+        //Scotland is a clone of GB, so every translation it does not override is the
+        //United Kingdom's name — in Italian it read "Regno Unito", in Dutch "Verenigd
+        //Koninkrijk". That was invisible while getCountryNameTranslations() hardcoded the
+        //four languages overridden below; it surfaced the moment the locale list became
+        //configurable and `it_IT` started being answered.
+        //
+        //So the inherited names are cleared first and the known ones written back. A
+        //language with no known name gets "Scotland", which is wrong-but-honest in the
+        //same way every other missing translation is, rather than confidently naming a
+        //different country.
+        foreach (get_object_vars($scotland->translations) as $languageKey => $names) {
+            $names->official = 'Scotland';
+            $names->common   = 'Scotland';
+        }
         $scotland->translations->deu->official = 'Schottland';
         $scotland->translations->deu->common = 'Schottland';
         $scotland->translations->fra->official = 'Écosse';
@@ -71,6 +130,8 @@ class CountriesInfo
         $scotland->translations->spa->common = 'Escocia';
         $scotland->translations->por->official = 'Escócia';
         $scotland->translations->por->common = 'Escócia';
+        $scotland->translations->ita->official = 'Scozia';
+        $scotland->translations->ita->common = 'Scozia';
         $scotland->demonym = 'Scottish';
         $scotland->area = '77933';
         $return['GB-SCT'] = $scotland;
@@ -158,44 +219,55 @@ class CountriesInfo
      *      )
      *  ...
      * )
-     * @todo make this list dynamic according to the locales registered
+     * ## Which locales appear, and why the language table is still static
+     *
+     * The locales come from the installation's own configuration, passed in at
+     * construction. They used to be a hardcoded `en_US`/`de_DE`/`pt_BR`/`es_ES`/`fr_FR`,
+     * which was wrong in both directions at once here: `it_IT` is configured on
+     * schoenstatt.link and got no country names at all, while `fr_FR` is not configured
+     * anywhere and was computed on every call.
+     *
+     * What stays static is {@see LANGUAGE_KEYS}, and that is not the same kind of
+     * hardcoding. It maps an ISO 639-1 language subtag to the ISO 639-3 key the vendored
+     * `countries.json` uses, and it lists exactly the thirteen languages that file
+     * actually carries — `cym deu fin fra hrv ita jpn nld por rus spa svk zho`. It is a
+     * fact about the data, not about this installation, and there is no way to derive it:
+     * `Locale::getPrimaryLanguage()` yields the 639-1 subtag and nothing in ext-intl maps
+     * that to 639-3.
+     *
+     * A configured locale whose language is not in the file — or in the table — falls
+     * back to the English name, which is what every missing translation already did.
+     *
      * @return string[][]
      */
     public function getCountryNameTranslations()
     {
+        //Resolved once rather than per country: 250 countries times the locale count.
+        $keyed = [];
+        foreach ($this->locales as $locale) {
+            $language = \Locale::getPrimaryLanguage((string) $locale);
+            //null rather than skipping, so a locale with no data still gets a key with
+            //the English fallback below. A caller reading $translations[$name][$locale]
+            //should never have to test whether the key exists.
+            $keyed[(string) $locale] = self::LANGUAGE_KEYS[$language] ?? null;
+        }
+
         $return = [];
         foreach ($this->countries as $country) {
-            $return[$country->name->common] = [
-                'en_US' => $country->name->common,
-                'de_DE' => property_exists($country->translations, 'deu')
-                    ? $country->translations->deu->common
-                    : $country->name->common,
-                'pt_BR' => property_exists($country->translations, 'por')
-                    ? $country->translations->por->common
-                    : $country->name->common,
-                'es_ES' => property_exists($country->translations, 'spa')
-                    ? $country->translations->spa->common
-                    : $country->name->common,
-                'fr_FR' => property_exists($country->translations, 'fra')
-                    ? $country->translations->fra->common
-                    : $country->name->common,
-            ];
-            if ($country->name->common != $country->name->official) {
-                $return[$country->name->official] = [
-                'en_US' => $country->name->official,
-                'de_DE' => property_exists($country->translations, 'deu')
-                    ? $country->translations->deu->official
-                    : $country->name->official,
-                'pt_BR' => property_exists($country->translations, 'por')
-                    ? $country->translations->por->official
-                    : $country->name->official,
-                'es_ES' => property_exists($country->translations, 'spa')
-                    ? $country->translations->spa->official
-                    : $country->name->official,
-                'fr_FR' => property_exists($country->translations, 'fra')
-                    ? $country->translations->fra->official
-                    : $country->name->official,
-                ];
+            foreach (['common', 'official'] as $form) {
+                $english = $country->name->$form;
+                //The official name is only listed when it differs; an entry keyed by the
+                //same string would just be overwritten.
+                if ('official' === $form && $country->name->common == $english) {
+                    continue;
+                }
+                $names = [];
+                foreach ($keyed as $locale => $key) {
+                    $names[$locale] = null !== $key && property_exists($country->translations, $key)
+                        ? $country->translations->$key->$form
+                        : $english;
+                }
+                $return[$english] = $names;
             }
         }
         return $return;

@@ -20,6 +20,17 @@ return [
         ],
         'key_locale' => 'en_US',
 
+        //The compiled catalog filename, '%s' being the locale. Must agree with the
+        //`translator.translation_file_patterns` pattern below — this key controls the
+        //writing, that one controls the reading.
+        'catalog_file_pattern' => '%s.lang.php',
+
+        //The text domain the navigation helper renders in. Unlike every other view
+        //helper, the menu is not translated in the dispatched controller's namespace: it
+        //is one tree shown on every page, so its strings belong to whichever domain owns
+        //the menu. 'Application' is the host application's conventional name for it.
+        'navigation_text_domain' => 'Application',
+
         // cache options have to be compatible with Laminas\Cache\StorageFactory::factory
         'cache_options' => [
             'adapter' => [
@@ -63,17 +74,15 @@ return [
                     ],
                 ],
                 'may_terminate' => true,
+                //There is no 'clear-cache' child route. It used to declare
+                //`'action' => 'clearCache'`, and JTranslateController has never had a
+                //clearCacheAction() — only index, edit and delete — so reaching
+                ///admin/translations/clear-cache was a guaranteed dispatch failure. It
+                //also carried no bjyauthorize guard, which is the only reason it never
+                //surfaced: it was unreachable in practice and a fatal in principle.
+                //Whatever it was meant to do is served by SionModel's
+                ///sm/clear-persistent-cache and by `bin/console cache:flush-persistent`.
                 'child_routes' => [
-                    'clear-cache' => [
-                        'type'    => Literal::class,
-                        'options' => [
-                            'route'    => '/clear-cache',
-                            'defaults' => [
-                                'controller' => Controller\JTranslateController::class,
-                                'action'     => 'clearCache',
-                            ],
-                        ],
-                     ],
                     'phrase' => [
                         'type'    => Segment::class,
                         'options' => [
