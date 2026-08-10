@@ -17,7 +17,7 @@ use function sprintf;
  * install instructions got an error and fixed it by hand, which is a poor way to
  * find out.
  *
- * ## Two deliberate differences from the databases already in production
+ * ## Deliberate differences from the databases already in production
  *
  * Both existing installations were created before this migration existed, so they
  * are not changed by it, and both differ from what a fresh install now gets. The
@@ -35,9 +35,24 @@ use function sprintf;
  *   column is a string that MySQL coerces on every write. A new install should not
  *   inherit that.
  *
- * Aligning the existing databases is a separate, deliberate operation — converting
- * the charset of a live table with ~12,900 translation rows is somebody's decision
- * to schedule, not a side effect of installing a library version.
+ * The charset half of that divergence is being closed. schoenstatt.link scheduled
+ * the conversion of its live tables in `database/db7.0.sql`; patres has not, and
+ * remains `utf8mb3_general_ci` until somebody schedules it there too. The
+ * `modified_by` divergence is untouched by that work and still stands.
+ *
+ * ## Why `utf8mb4_unicode_520_ci` and not something newer
+ *
+ * It is the newest Unicode Collation Algorithm available on *both* engines this
+ * library is expected to run on. MySQL 8's default `utf8mb4_0900_ai_ci` (UCA 9.0.0)
+ * does not exist on MariaDB; MariaDB's `utf8mb4_uca1400_*` family (UCA 14.0.0) does
+ * not exist before MariaDB 11, and 10.11 LTS has none of them. `_unicode_520_ci`
+ * (UCA 5.2.0) exists on both. It also beats the `utf8mb4_unicode_ci` this migration
+ * originally specified, which is UCA 4.0.0 from 2003 and gets `Æ`/`AE` wrong.
+ *
+ * Caveat for whoever moves to MariaDB 11 or MySQL 8: every pre-`uca1400` collation
+ * is PAD SPACE (trailing spaces ignored in comparison) and both modern families are
+ * NO PAD, so that semantic changes once more at that jump. It is a property of the
+ * era, not of this particular choice.
  *
  * ## Why IF NOT EXISTS
  *
@@ -79,7 +94,7 @@ final class M001CreatePhraseTables implements MigrationInterface
                       `origin_route` VARCHAR(255) NULL DEFAULT NULL,
                       PRIMARY KEY (`translation_phrase_id`),
                       KEY `project_text_domain` (`project`, `text_domain`)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
                     SQL,
                     $phrases
                 ),
@@ -105,7 +120,7 @@ final class M001CreatePhraseTables implements MigrationInterface
                         FOREIGN KEY (`translation_phrase_id`)
                         REFERENCES `%s` (`translation_phrase_id`)
                         ON DELETE CASCADE ON UPDATE CASCADE
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
                     SQL,
                     $translations,
                     $translations,
