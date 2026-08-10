@@ -4,6 +4,13 @@ use SionModel\Text\Text;
 
 $headText = 'Manage Translations';
 $this->headTitle($headText);
+
+//Phrase id => number of history entries, for every phrase of this project that has any.
+//One query for the page rather than one per row; phrases with no history are absent
+//rather than zero, which is why every read of it is `?? 0`.
+$historyCounts = isset($this->historyCounts) && is_array($this->historyCounts)
+    ? $this->historyCounts
+    : [];
 ?>
 <p><?php if ($this->showAll) :
     ?>
@@ -50,7 +57,22 @@ foreach ($this->translations as $entity) :
         };?></td>
     <td><a href="<?php echo $this->url('jtranslate/phrase/edit', ['phrase_id' => $entity['phraseId']]); ?>">
 <span class="glyphicon glyphicon-pencil"></span></a><a href="<?php echo $this->url('jtranslate/phrase/delete', ['phrase_id' => $entity['phraseId']]); ?>">
-<span class="glyphicon glyphicon-remove"></span></a>&nbsp;<?php echo $this->escapeHtml(Text::truncate($entity['phrase'], 100));?></td>
+<span class="glyphicon glyphicon-remove"></span></a><?php
+    //Marks a phrase whose translations have been replaced at least once, so a
+    //translator can see before opening it that somebody has already argued about this
+    //one. Costs no query of its own: $historyCounts is the whole listing's answer,
+    //fetched once — see TranslationsTable::getHistoryCounts().
+    $entries = $historyCounts[$entity['phraseId']] ?? 0;
+if ($entries > 0) :
+    $tooltip = sprintf(
+        $this->translate('%s previous version(s) — a translation here has been replaced before'),
+        (string) $entries
+    );?>
+<a href="<?php echo $this->url('jtranslate/phrase/edit', ['phrase_id' => $entity['phraseId']]); ?>"
+   data-toggle="tooltip" data-placement="bottom" data-container="body"
+   data-original-title="<?php echo $this->escapeHtmlAttr($tooltip); ?>"><span
+   class="glyphicon glyphicon-time"></span></a>
+<?php endif;?>&nbsp;<?php echo $this->escapeHtml(Text::truncate($entity['phrase'], 100));?></td>
     <?php foreach ($this->locales as $key => $value) :
         ?>
     <td><?php

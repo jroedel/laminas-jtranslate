@@ -1,4 +1,5 @@
 <?php
+
 $entity = $this->phrase;
 $headText = 'Edit Translation';
 $this->headTitle($headText); ?>
@@ -15,4 +16,70 @@ foreach ($this->locales as $key => $value) {
  echo $this->formRow($form->get('security'));
  echo $this->formRow($form->get('submit'));
  echo $this->form()->closeTag();
-?>
+
+/*
+ * What replacing a translation here has cost before, newest first.
+ *
+ * Shown under the form and not beside it because it is what you read *before*
+ * deciding, and the decision is the form above. Absent entirely when nothing has ever
+ * been overwritten, which is the common case — a phrase whose languages were only ever
+ * filled in has no thread, and an empty panel saying so on every screen would be noise.
+ *
+ * `previous` is a real recovery path: `trans_translations` keeps no copy, so before
+ * this table existed the text below was simply gone. Copying one back into the field
+ * above and saving is how a bad edit gets undone.
+ */
+$history = isset($this->history) && is_array($this->history) ? $this->history : [];
+if ([] !== $history) : ?>
+<hr>
+<h2><?php echo $this->translate('Previous versions');?></h2>
+<p class="help-block"><?php echo $this->translate(
+    'What writing to this phrase has replaced, newest first. Nothing here is rendered '
+    . 'by the site any more — it is kept so a change can be reversed, and so the reason '
+    . 'for a change survives the person who made it.'
+);?></p>
+<table class="table responsive-table">
+<thead><tr>
+    <th><?php echo $this->translate('Language');?></th>
+    <th><?php echo $this->translate('Previous text');?></th>
+    <th><?php echo $this->translate('Note');?></th>
+    <th><?php echo $this->translate('Replaced');?></th>
+</tr></thead>
+<tbody>
+<?php foreach ($history as $row) :
+    $isRetraction = 'retract' === ($row['operation'] ?? null);
+    ?>
+<tr>
+    <td><?php echo $this->escapeHtml((string) ($row['locale'] ?? ''));
+    if ($isRetraction) :
+        //A retraction and an overwrite lose the same text but leave the language in
+        //opposite states, and only one of them is a translation somebody can look at
+        //on the site right now.
+        ?><br><span class="label label-warning"><?php
+        echo $this->translate('withdrawn');?></span><?php
+    endif;?></td>
+    <td><?php echo $this->escapeHtml((string) ($row['old_translation'] ?? ''));?></td>
+    <td><?php $note = $row['notes'] ?? null;
+    echo null === $note || '' === $note
+        ? '<span class="text-muted">&mdash;</span>'
+        : $this->escapeHtml((string) $note);?></td>
+    <td><?php
+    if (isset($row['replaced_on']) && $row['replaced_on']) {
+        echo $this->escapeHtml((string) $row['replaced_on']);
+    }
+    $by = $row['replacedBy'] ?? null;
+    if (null !== $by) {
+        echo '<br><small class="text-muted">' . $this->escapeHtml((string) $by) . '</small>';
+    }
+    //The text domain is only worth naming when it is not this phrase's own: the thread
+    //is keyed on the phrase rather than the row, so it can carry entries written while
+    //the same string lived in another domain.
+    $rowDomain = $row['text_domain'] ?? null;
+    if (null !== $rowDomain && isset($entity['textDomain']) && $rowDomain !== $entity['textDomain']) {
+        echo '<br><small class="text-muted">' . $this->escapeHtml((string) $rowDomain) . '</small>';
+    }?></td>
+</tr>
+<?php endforeach;?>
+</tbody>
+</table>
+<?php endif;

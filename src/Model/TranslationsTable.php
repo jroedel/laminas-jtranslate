@@ -907,12 +907,127 @@ HAVING PhraseLocaleCount < ?";
             $where
         );
 
+        //Resolved here rather than in the view, because the view has an integer and no
+        //way to turn it into a person. Same directory the listing attributes
+        //translations with, so a name is spelled the same on both screens.
+        $users = $this->getUserTable()->getUsers();
+
         $rows = [];
         foreach ($this->adapter->query($sql, $parameters) as $row) {
-            $rows[] = (array) $row;
+            $row               = (array) $row;
+            $row['writtenBy']  = $this->userName($users, $row['written_by'] ?? null);
+            $row['replacedBy'] = $this->userName($users, $row['replaced_by'] ?? null);
+            $rows[]            = $row;
         }
 
         return $rows;
+    }
+
+    /**
+     * A display name for a user id, or null.
+     *
+     * Null for an id nobody has a name for, which is a real case and not an error: an
+     * account can be deleted long after the edit it made, and the API's own writes carry
+     * a bot account whose username is what the listing shows.
+     *
+     * @param array<int, array<string, mixed>> $users
+     * @param mixed $userId
+     * @return string|null
+     */
+    private function userName(array $users, $userId)
+    {
+        if (null === $userId || '' === $userId) {
+            return null;
+        }
+
+        $user = $users[(int) $userId] ?? null;
+
+        return is_array($user) && isset($user['username']) ? (string) $user['username'] : null;
+    }
+
+    /**
+     * How many history entries each phrase of this project has, keyed by phrase id.
+     *
+     * One query for the whole listing, which is what makes the marker in the admin
+     * table affordable. The alternative — asking per row — is 1,700 queries on a page
+     * that already renders 1,700 rows, and the marker is not worth that.
+     *
+     * Grouped in the database rather than counted in PHP: the join is
+     * `(project, phrase_hash)`, the leading columns of the `thread` index, so the
+     * server answers from the index and returns one small row per phrase that has any
+     * history at all. Phrases with none are absent rather than zero — the caller wants
+     * `isset()`, and an entry per phrase would make this as large as the listing.
+     *
+     * Keyed by phrase id and not by hash because the listing is: the view has ids and
+     * would otherwise have to learn what a phrase hash is to ask a question about an
+     * icon.
+     *
+     * @return array<int, int> phrase id => number of entries, phrases with none omitted
+     */
+    public function getHistoryCounts()
+    {
+        $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
+        $sql     = sprintf(
+            'SELECT p.`translation_phrase_id` AS `phrase_id`, COUNT(*) AS `entries` '
+            . 'FROM `%s` p '
+            . 'INNER JOIN `%s` h ON h.`project` = p.`project` AND h.`phrase_hash` = p.`phrase_hash` '
+            . 'WHERE p.`project` = ? '
+            . 'GROUP BY p.`translation_phrase_id`',
+            $this->config['phrases_table_name'],
+            $history
+        );
+
+        $counts = [];
+        foreach ($this->adapter->query($sql, [$this->config['project_name']]) as $row) {
+            $row                            = (array) $row;
+            $counts[(int) $row['phrase_id']] = (int) $row['entries'];
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Retire the phrase for an exact string, if this project has one.
+     *
+     * For content the application knows has been *superseded* — a record field whose
+     * text a moderator has just replaced. The old string is still a perfectly good
+     * phrase row with perfectly good translations, and nothing renders it any more, so
+     * it sits at the top of a translator's worklist asking for work that will never be
+     * seen. See Schoenstatt\Model\SchoenstattTable::retireSupersededPhrases() for the
+     * only caller.
+     *
+     * Retired, never deleted, and that is what makes it safe to do automatically: the
+     * row and its translations stay, `--undo` reverses it, and the phrase keeps
+     * rendering. If the string comes back — a moderator reverting an edit — the next
+     * render that misses clears `retired_on` on its own, because the discovery insert
+     * is an `ON DUPLICATE KEY UPDATE` that does exactly that. So a wrong guess here
+     * heals itself rather than needing to be noticed.
+     *
+     * @param string $phrase the exact text, normalized the way a stored phrase is
+     * @param string $textDomain
+     * @return bool whether a live row was found and retired
+     */
+    public function retirePhraseByText($phrase, $textDomain)
+    {
+        $sql = sprintf(
+            'UPDATE `%s` SET `retired_on` = UTC_TIMESTAMP() '
+            . 'WHERE `project` = ? AND `text_domain` = ? AND `phrase_hash` = ? AND `retired_on` IS NULL',
+            $this->config['phrases_table_name']
+        );
+
+        $result = $this->adapter->query($sql, [
+            $this->config['project_name'],
+            $textDomain,
+            PhraseIdentity::raw((string) $phrase),
+        ]);
+
+        $affected = $result->getAffectedRows();
+        if ($affected > 0) {
+            //The listing and the compiled catalogs both read a cached view of this.
+            $this->invalidatePhraseCaches();
+        }
+
+        return $affected > 0;
     }
 
     /**
