@@ -13,14 +13,16 @@ use Laminas\Db\ResultSet\ResultSet;
 use JTranslate\Cache\PhraseCache;
 use JTranslate\Service\ActingUserProviderInterface;
 use JTranslate\Service\UserDirectoryInterface;
+use JTranslate\Model\PhraseIdentity;
 
 class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
 {
     /**
-     * Every phrase already known to the database, as [text domain => [md5 => true]].
+     * Every phrase this project has, as [text domain => [hex hash => is retired]].
      *
-     * @see getPhraseIndex() for why it holds hashes rather than the phrases.
-     * @var array<string, array<string, true>> $phraseIndex
+     * @see getPhraseIndex() for why it holds hashes rather than the phrases, and why
+     *      the value is a retirement flag rather than a bare `true`.
+     * @var array<string, array<string, bool>> $phraseIndex
      */
     protected $phraseIndex = [];
 
@@ -210,16 +212,32 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      *
      * @return array
      */
-    public function getTranslations($fromAllProjects = false)
+    /**
+     * @param bool $fromAllProjects
+     * @param bool $includeRetired retired phrases are excluded by default, because the
+     *        callers are the admin listing — which must not ask anyone to translate a
+     *        phrase that has left the project — and writeMissingPhrasesToDb(), which
+     *        uses this to find an existing translation of the same text in another text
+     *        domain. The second one is worth thinking about: a retired row's
+     *        translation is still a perfectly good translation of that string, but
+     *        seeding from it would silently resurrect the editorial content of a
+     *        retired phrase into a live one, and the translator would have no way to
+     *        see where it came from. Better to leave the new phrase untranslated and
+     *        visible as work.
+     * @return array
+     */
+    public function getTranslations($fromAllProjects = false, $includeRetired = false)
     {
 //         $cacheKey = 'translations';
 //         if ($fromAllProjects) {
 //             $cacheKey.='-from-all-projects';
 //         }
         $sql = "SELECT t.`translation_id`,p.`translation_phrase_id`, t.`locale`,t.`translation`,
-t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`, p.`origin_route`
+t.`modified_by`,t.`modified_on`, p.`text_domain`,  p.`phrase`, p.`added_on`, p.`project`, p.`origin_route`,
+p.`retired_on`
 FROM `trans_phrases` p
-LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
+LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`"
+        . ($includeRetired ? '' : "\nWHERE p.`retired_on` IS NULL") . "
 ORDER BY `text_domain`, `phrase`";
         $results = $this->fetchSome(null, $sql);
 
@@ -246,6 +264,7 @@ ORDER BY `text_domain`, `phrase`";
                     'phrase'      => $row['phrase'],
                     'originRoute' => $row['origin_route'],
                     'addedOn'     => $row['added_on'],
+                    'retiredOn'   => $row['retired_on'],
                 ];
             }
 
@@ -273,10 +292,12 @@ ORDER BY `text_domain`, `phrase`";
 
     public function getOutstandingTranslationCount()
     {
+        //retired phrases are not outstanding work, so they are not counted — the badge
+        //this feeds is a call to action
         $sql = "SELECT p.`translation_phrase_id`, COUNT(*) AS PhraseLocaleCount
 FROM `trans_phrases` p
 LEFT JOIN `trans_translations` t ON p.`translation_phrase_id` = t.`translation_phrase_id`
-WHERE (`project` = ?)
+WHERE (`project` = ?) AND p.`retired_on` IS NULL
 GROUP BY translation_phrase_id
 HAVING PhraseLocaleCount < ?";
         $sqlParams = [$this->config['project_name'], count($this->config['locales_to_translate']) + 1];
@@ -307,6 +328,9 @@ HAVING PhraseLocaleCount < ?";
         'search',
         'untranslatedIn',
         'translatedIn',
+        'includeRetired',
+        'onlyRetired',
+        'originRouteLike',
     ];
 
     /**
@@ -367,6 +391,7 @@ HAVING PhraseLocaleCount < ?";
                 'phrase',
                 'added_on',
                 'origin_route',
+                'retired_on',
             ])
             //Ordered by the primary key last, so the sequence is total even when two
             //phrases share a text domain and a text. Without a tie-break MySQL may
@@ -415,6 +440,7 @@ HAVING PhraseLocaleCount < ?";
                 'phrase',
                 'added_on',
                 'origin_route',
+                'retired_on',
             ])
             ->where([
                 'p.translation_phrase_id' => (int) $id,
@@ -454,6 +480,7 @@ HAVING PhraseLocaleCount < ?";
                 'phrase'      => $row['phrase'],
                 'originRoute' => $row['origin_route'],
                 'addedOn'     => $row['added_on'],
+                'retiredOn'   => $row['retired_on'],
             ];
         }
 
@@ -508,11 +535,30 @@ HAVING PhraseLocaleCount < ?";
         $where = new Where();
         $where->equalTo('p.project', $this->config['project_name']);
 
+        //Retired phrases are hidden by default, because the whole purpose of retiring
+        //one is to stop asking a translator to work on it. `includeRetired` is opt-in
+        //rather than the default for the same reason the project predicate cannot be
+        //turned off at all: a listing that quietly grows by 5,000 dead rows because
+        //somebody forgot a flag is worse than one that needs the flag spelled out.
+        if (! empty($criteria['onlyRetired'])) {
+            $where->isNotNull('p.retired_on');
+        } elseif (empty($criteria['includeRetired'])) {
+            $where->isNull('p.retired_on');
+        }
+
         if (isset($criteria['textDomain']) && '' !== $criteria['textDomain']) {
             $where->equalTo('p.text_domain', $criteria['textDomain']);
         }
         if (isset($criteria['originRoute']) && '' !== $criteria['originRoute']) {
             $where->equalTo('p.origin_route', $criteria['originRoute']);
+        }
+        //A separate criterion from `originRoute` rather than an option on it, because
+        //the two differ in whether the caller's `%` and `_` are wildcards. `search`
+        //escapes them; this one deliberately does not, since a caller asking for
+        //'blog%' means the wildcard. That makes it a bulk-administration criterion and
+        //not something to expose to an HTTP query parameter.
+        if (isset($criteria['originRouteLike']) && '' !== $criteria['originRouteLike']) {
+            $where->like('p.origin_route', $criteria['originRouteLike']);
         }
         if (isset($criteria['search']) && '' !== $criteria['search']) {
             //Escaped by hand: laminas-db parameterizes the value but LIKE reads % and _
@@ -624,17 +670,27 @@ HAVING PhraseLocaleCount < ?";
     }
 
     /**
-     * Check if an entity exists
-     * @param string $entity
-     * @param number|string $id
+     * Whether this project has a phrase with this id.
+     *
+     * **Project-scoped, and that is not cosmetic.** This was the one path in this class
+     * that fetched by bare id, and deletePhrase() is its only caller: an admin of one
+     * application could delete another application's phrase, and its translations with
+     * it, by putting an integer in the URL. Three projects share this table here, and
+     * the route constraint on `phrase_id` covers the whole live id range. Every read
+     * path is scoped for the reasons set out on applyPhraseCriteria(); a *destructive*
+     * path had a stronger claim to it than any of them.
+     *
+     * @param int|string $id
      * @throws \Exception
      * @return boolean
      */
     public function existsPhrase($id)
     {
-        $tableKey   = 'translation_phrase_id';
-        $gateway    = $this->phrasesGateway;
-        $result     = $gateway->select([$tableKey => $id]);
+        $gateway = $this->phrasesGateway;
+        $result  = $gateway->select([
+            'translation_phrase_id' => (int) $id,
+            'project'               => $this->config['project_name'],
+        ]);
         if (! $result instanceof ResultSet || 0 === $result->count()) {
             return false;
         }
@@ -654,8 +710,14 @@ HAVING PhraseLocaleCount < ?";
         $gateway = $this->translationsGateway;
         $return = $gateway->delete(['translation_phrase_id' => $id]);
 
+        //Scoped again on the delete itself rather than trusting the check above. The
+        //two statements are not in a transaction, so a check-then-delete is not
+        //atomic, and the predicate costs nothing.
         $gateway = $this->phrasesGateway;
-        $return = $gateway->delete(['translation_phrase_id' => $id]);
+        $return = $gateway->delete([
+            'translation_phrase_id' => (int) $id,
+            'project'               => $this->config['project_name'],
+        ]);
 
         if ($return !== 1) {
             throw new \Exception('Delete action expected a return code of \'1\', received \'' . $return . '\'');
@@ -666,6 +728,100 @@ HAVING PhraseLocaleCount < ?";
         }
 
         return $return;
+    }
+
+    /**
+     * Mark phrases as no longer part of the project, without destroying anything.
+     *
+     * ## Why this exists instead of a DELETE
+     *
+     * Nothing was ever removed from these tables, and the reason was never that nobody
+     * wanted to: `deletePhrase()` cascades the translations away and
+     * `trans_translations` has no history to recover them from, so a wrong deletion
+     * silently destroys human work that cannot be got back. Against that, doing nothing
+     * is always the rational choice, and the table only grows.
+     *
+     * Retirement inverts the economics. The row and its translations stay; the phrase
+     * simply stops appearing in the translator's listing and in the `/api/v3/phrases`
+     * collection, so nobody is asked to work on it. And it is self-repairing: the first
+     * time a page renders a retired phrase, {@see reportMissingTranslation()} sees it in
+     * the index flagged as retired and queues it, and the idempotent insert in
+     * {@see writeMissingPhrasesToDb()} clears `retired_on`. A wrong retirement costs
+     * nothing and fixes itself; a wrong deletion costs translations nobody can recover.
+     * That is the difference between a decision that has to be right and one that only
+     * has to be roughly right.
+     *
+     * It is what makes bulk cleanup safe at all. `origin_route` records where a phrase
+     * was *first seen*, not where it is used — the index is keyed by phrase text, so
+     * whichever page rendered a string first owns its origin route permanently. So
+     * retiring everything from a route that has been removed will always catch live
+     * strings that merely had the bad luck to appear there first. With retirement,
+     * those come back on their own. With deletion, each one is a judgement call made
+     * under threat of unrecoverable loss.
+     *
+     * ## Two limits on "comes back on its own", both real
+     *
+     * **A phrase already translated in every configured locale will not wake itself.**
+     * The return path hangs off `Translator::EVENT_MISSING_TRANSLATION`, which fires
+     * only when the compiled catalog for the rendered locale has no entry — that is
+     * the whole point of the architecture, and putting a write on the path of a
+     * *successful* lookup is the `last_seen` column this design deliberately does not
+     * have. So retirement is reliable exactly where it matters, on phrases with
+     * outstanding work, and a fully translated phrase that is still in use stays
+     * retired until somebody calls {@see unretire()}. It keeps rendering either way.
+     *
+     * **Retiring from the console does not reach the web server's cache.** APCu's
+     * segment belongs to the SAPI that created it, so clearing it from a CLI process
+     * leaves the Apache workers holding a phrase index that still says these rows are
+     * live — and a render that consults a stale index queues no un-retire. Nothing is
+     * corrupted and it self-corrects when the item expires, but until then the return
+     * path is simply not armed. Clear the web cache after a bulk retirement.
+     *
+     * @param int[] $ids
+     * @return int rows affected
+     */
+    public function retire(array $ids)
+    {
+        return $this->setRetirement($ids, date_format(new \DateTime('now', new \DateTimeZone('UTC')), 'Y-m-d H:i:s'));
+    }
+
+    /**
+     * Bring retired phrases back by hand, rather than waiting for a render to do it.
+     *
+     * @param int[] $ids
+     * @return int rows affected
+     */
+    public function unretire(array $ids)
+    {
+        return $this->setRetirement($ids, null);
+    }
+
+    /**
+     * @param int[] $ids
+     * @param string|null $retiredOn
+     * @return int rows affected
+     */
+    protected function setRetirement(array $ids, $retiredOn)
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if ([] === $ids) {
+            return 0;
+        }
+
+        $sql    = new Sql($this->adapter);
+        $update = $sql->update($this->config['phrases_table_name'])
+            ->set(['retired_on' => $retiredOn])
+            //project-scoped for the same reason deletePhrase() is: an id alone
+            //addresses a table three applications share
+            ->where([
+                'translation_phrase_id' => $ids,
+                'project'               => $this->config['project_name'],
+            ]);
+        $affected = $sql->prepareStatementForSqlObject($update)->execute()->getAffectedRows();
+
+        $this->invalidatePhraseCaches();
+
+        return (int) $affected;
     }
 
     /**
@@ -692,37 +848,48 @@ HAVING PhraseLocaleCount < ?";
     }
 
     /**
-     * The set of phrases already in the database, per text domain, as hashes.
+     * Which phrases this project already has, per text domain, and which are retired.
      *
-     * ## Why hashes, and why this used to be uncacheable
+     * The value is **`true` when the row is retired** and `false` when it is live, so
+     * this answers two questions at once: `isset()` is the membership test the render
+     * path used to make, and the value tells it whether a row that does exist needs
+     * waking up. A plain membership set could not express the second, and getting that
+     * wrong is subtle: if retired rows were simply absent from the set, the render path
+     * would insert a *second* row for a phrase that already has translations; if they
+     * were present as bare members, nothing would ever un-retire and `retired_on` would
+     * be a one-way door. See {@see retire()}.
      *
-     * This is a membership set and nothing else — the only question ever asked of it
-     * is "have we seen this phrase in this domain before". It used to hold the phrases
-     * themselves, in a list, which made it wrong twice over.
+     * ## Why hashes rather than the phrases
      *
-     * Measured on this project's data: 6,860 phrases whose average length is 1,494
-     * characters, because 86% of them are book and dictionary bodies rather than UI
-     * labels. Serialized, that array is **9.9 MiB**. It therefore blew straight past
-     * the cache's item budget and was silently never stored, so the query behind it
-     * ran on every single request — and had it been stored, an item that size against
-     * production's 32 MB APCu segment is the exact shape of the allocation failure
-     * that wipes the whole segment. Hashing takes it to roughly 270 KiB, which fits,
-     * so this is cached for the first time.
+     * Because the hash *is* the identity — see {@see PhraseIdentity} — and because the
+     * query then reads 32 bytes a row instead of the phrase. The size of this item
+     * therefore no longer depends on how long the phrases are, which is what made it
+     * uncacheable before: this table held 5,088 rows of truncated page bodies, and
+     * holding the phrases themselves produced a 9.9 MiB array that blew past the
+     * cache's item budget, was silently never stored, and so ran its query on every
+     * single request. (Against production's 32 MB APCu segment, an item that size is
+     * also the exact shape of the allocation failure that wipes the whole segment.)
+     * Those rows are gone and the corpus is now 75 KB, but the property worth keeping
+     * is that this item's size is bounded by the row *count* alone.
      *
-     * Keying by hash also turns the membership test from an in_array() scan over up to
-     * 5,922 strings into an isset().
+     * ## Why the hashing is still not done in SQL
      *
-     * ## Why the hashing is not done in SQL
+     * `SELECT SHA2(phrase, 256)` is charset-dependent: the server hashes the value's
+     * bytes in the column's character set, so a later charset conversion silently
+     * changes every hash while PHP keeps computing the old one. Reading the stored
+     * `phrase_hash` column is not the same thing — that column was written from PHP by
+     * this class, so it carries no dependency on how the server would have hashed it.
+     * The one exception is M003's one-time backfill, which is argued there.
      *
-     * `SELECT MD5(phrase)` would move 220 KiB over the wire instead of 10 MiB, and it
-     * is tempting. It is also charset-dependent: MySQL's MD5() hashes the value's bytes
-     * in its own character set, and any mismatch with what PHP receives yields hashes
-     * that never match. The failure would be silent and permanent — every phrase would
-     * look new, so every request would insert duplicates of every phrase forever. The
-     * 10 MiB read now happens once per cache lifetime rather than once per request,
-     * which is the part that mattered.
+     * ## This is now an optimization, not a correctness mechanism
      *
-     * @return array<string, array<string, true>> text domain => set of md5(phrase)
+     * `UNIQUE (project, text_domain, phrase_hash)` and the `ON DUPLICATE KEY UPDATE` in
+     * {@see writeMissingPhrasesToDb()} mean a stale, evicted or entirely absent cache
+     * can no longer cause a duplicate row. It can only cause a redundant insert
+     * attempt. That was not true before, and the difference is the whole point of the
+     * constraint.
+     *
+     * @return array<string, array<string, bool>> text domain => hex phrase hash => is retired
      */
     public function getPhraseIndex()
     {
@@ -730,20 +897,34 @@ HAVING PhraseLocaleCount < ?";
             return $cached;
         }
 
-        //only the two columns the set is built from; the other three were read and
-        //discarded on every request
-        $select = new Sql($this->adapter);
-        $select ->select($this->config['phrases_table_name'])
-                ->columns([
-                    'text_domain',
-                    'phrase',
-                ])
-                ->where(['project' => $this->config['project_name']]);
-        $results = $this->fetchSome($select);
+        //Executed through prepareStatementForSqlObject(), the way every other read in
+        //this class does it, and NOT through fetchSome($select).
+        //
+        //That spelling was here for years and did nothing. fetchSome() passes its
+        //first argument to TableGateway::select() as a *predicate*, and a
+        //Laminas\Db\Sql\Sql object is not one — the gateway silently ignored it and
+        //ran `SELECT * FROM trans_phrases` with no WHERE at all. So neither the column
+        //list nor the project filter was ever applied, and this method has always
+        //returned every phrase of **every project sharing the table**, keyed only by
+        //text domain. Text domains overlap between projects, so a phrase belonging to
+        //another application suppressed the insert of this project's own copy, and
+        //that phrase stayed permanently untranslatable here. It also explains the size
+        //this item used to reach: the measurement was across all projects.
+        $sql    = new Sql($this->adapter);
+        $select = $sql->select($this->config['phrases_table_name'])
+            ->columns([
+                'text_domain',
+                //hex here rather than bin2hex() in PHP so nothing binary crosses the
+                //driver; the column is BINARY(32) and some drivers hand back raw
+                //bytes in ways that do not survive a JSON-serializing cache.
+                'hex_hash' => new \Laminas\Db\Sql\Expression('LOWER(HEX(`phrase_hash`))'),
+                'retired_on',
+            ])
+            ->where(['project' => $this->config['project_name']]);
 
         $return = [];
-        foreach ($results as $row) {
-            $return[$row['text_domain']][md5($row['phrase'])] = true;
+        foreach ($sql->prepareStatementForSqlObject($select)->execute() as $row) {
+            $return[$row['text_domain']][(string) $row['hex_hash']] = null !== $row['retired_on'];
         }
 
         $this->cache->set(PhraseCache::KEY_PHRASE_INDEX, $return);
@@ -751,24 +932,39 @@ HAVING PhraseLocaleCount < ?";
     }
 
     /**
-     * Add to the list of translations to add to the database
+     * Queue a phrase for insertion, and stop asking about it this request.
+     *
+     * Marking it seen — and seen as *live* — is what keeps a phrase that appears twice
+     * on one page from being queued twice, and what keeps a phrase queued for
+     * un-retirement from also being queued for insertion.
+     *
      * @param array $params
      */
     protected function addMissingPhrase($params)
     {
-        //marking it seen keeps a phrase that appears twice on one page from being
-        //queued, and inserted, twice
-        $this->phraseIndex[$params['text_domain']][md5($params['message'])] = true;
+        $this->phraseIndex[$params['text_domain']][PhraseIdentity::hex($params['message'])] = false;
         $this->newMissingPhrases[$params['text_domain']][] = $params['message'];
         return $this;
     }
 
     /**
-     * Note a phrase the translator asked for and the database has never seen.
+     * Note a phrase the translator asked for, and act on what the database knows.
      *
-     * Called from the translator's missing-translation event, so it runs inside page
-     * rendering and must stay cheap: the index is loaded once per request and the
-     * test is an isset() on a hash rather than a scan over every phrase in the domain.
+     * Three outcomes, and the middle one is the reason the index holds a flag rather
+     * than a bare membership marker:
+     *
+     * - **absent** — queue an insert
+     * - **present but retired** — queue it anyway. The insert is idempotent and its
+     *   `ON DUPLICATE KEY UPDATE` clears `retired_on`, so a phrase that turns out to
+     *   still be in use wakes itself up the first time a page renders it, keeping the
+     *   translations it already had. That reversibility is what makes retiring a
+     *   phrase a cheap decision instead of an irreversible one.
+     * - **present and live** — nothing to do, which is the overwhelmingly common case
+     *   and must stay free.
+     *
+     * Called from the translator's missing-translation event, so this runs inside page
+     * rendering: the index is loaded once per request and the test is an isset() on a
+     * hash, never a query and never a scan.
      *
      * @param array $params
      */
@@ -778,7 +974,9 @@ HAVING PhraseLocaleCount < ?";
             $this->phraseIndex       = $this->getPhraseIndex();
             $this->phraseIndexLoaded = true;
         }
-        if (! isset($this->phraseIndex[$params['text_domain']][md5($params['message'])])) {
+        $hex   = PhraseIdentity::hex($params['message']);
+        $state = $this->phraseIndex[$params['text_domain']][$hex] ?? null;
+        if (null === $state || true === $state) {
             $this->addMissingPhrase($params);
         }
         return $this;
@@ -786,6 +984,16 @@ HAVING PhraseLocaleCount < ?";
 
     /**
      * Returns the translated text of the db in a 4-dimensional array
+     *
+     * **Retired phrases are included, deliberately.** This is what
+     * writePhpTranslationArrays() compiles into the `*.lang.php` catalogs the site
+     * actually renders from, and retiring a phrase is a statement about the
+     * *translator's worklist*, not about what the site displays. Excluding them here
+     * would mean that retiring a phrase instantly reverts every page still rendering it
+     * to English — which is precisely the irreversible damage `retired_on` exists to
+     * avoid, arriving by a different door. A retired phrase keeps rendering its
+     * translation until a render proves it live again or a human deletes the row.
+     *
      * @return string[][][]
      */
     public function getTranslatedText()
@@ -1093,19 +1301,42 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 if (! isset($phrase)) {
                     continue;
                 }
-                //insert into phrases table
-                $sql = new Sql($this->adapter);
-                $insert =
-                $sql->insert($this->config['phrases_table_name'])
-                    ->values([
-                        'project' => $this->config['project_name'],
-                        'text_domain' => $textDomain,
-                        'phrase' => $phrase,
-                        'added_on' => $dateString,
-                        'origin_route' => $routeName,
-                    ]);
-                $statement = $sql->prepareStatementForSqlObject($insert);
-                $lastResult = $statement->execute();
+                //Idempotent, and the un-retire branch in one statement.
+                //
+                //Written by hand because laminas-db's Sql\Insert cannot express ON
+                //DUPLICATE KEY UPDATE, and this clause is doing three separate jobs:
+                //
+                //- it makes a stale or evicted phrase index harmless. Before the
+                //  UNIQUE constraint existed, a cache miss on a phrase that was in
+                //  fact present inserted a second row, and nothing anywhere refused
+                //  it. That is now a no-op instead of a duplicate.
+                //- it clears `retired_on`, which is how a phrase that was retired and
+                //  turns out to still be in use comes back with its translations
+                //  intact. See reportMissingTranslation().
+                //- `LAST_INSERT_ID(translation_phrase_id)` is what makes
+                //  getGeneratedValue() answer with the *existing* row's id on the
+                //  duplicate branch. Without it MySQL reports 0 there, and the
+                //  translation rows below would be attached to phrase 0.
+                //
+                //`origin_route` is deliberately not updated: it records where a phrase
+                //was first seen, and overwriting it on every subsequent sighting would
+                //turn the only context a translator gets into "wherever it was
+                //rendered most recently", which is both less useful and less true.
+                $sql = sprintf(
+                    'INSERT INTO `%s` (`project`, `text_domain`, `phrase`, `phrase_hash`, `added_on`, '
+                    . '`origin_route`) VALUES (?, ?, ?, ?, ?, ?) '
+                    . 'ON DUPLICATE KEY UPDATE `retired_on` = NULL, '
+                    . '`translation_phrase_id` = LAST_INSERT_ID(`translation_phrase_id`)',
+                    $this->config['phrases_table_name']
+                );
+                $lastResult = $this->adapter->query($sql, [
+                    $this->config['project_name'],
+                    $textDomain,
+                    $phrase,
+                    PhraseIdentity::raw($phrase),
+                    $dateString,
+                    $routeName,
+                ]);
                 $phrasesKeyId = $lastResult->getGeneratedValue();
                 $result[] = $lastResult;
 
@@ -1156,14 +1387,28 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                 }
 
                 //insert rows
+                //
+                //The no-op ON DUPLICATE clause exists for the un-retire branch above:
+                //a phrase coming back from retirement already has its translations,
+                //and `UNIQUE (translation_phrase_id, locale)` would otherwise make
+                //this statement throw. Assigning a column to itself is the spelling
+                //that means "leave the stored row exactly as it is" — which is the
+                //required behaviour, because the stored row is a translator's work and
+                //the value computed here is a guess derived from another text domain.
                 foreach ($translationsToInsert as $row) {
-                    $sql = new Sql($this->adapter);
-                    $insert =
-                    $sql->insert($this->config['translations_table_name'])
-                        ->values($row);
-                    $statement = $sql->prepareStatementForSqlObject($insert);
-                    $lastResult = $statement->execute();
-                    $result[] = $lastResult;
+                    $sql = sprintf(
+                        'INSERT INTO `%s` (`translation_phrase_id`, `locale`, `translation`, `modified_by`, '
+                        . '`modified_on`) VALUES (?, ?, ?, ?, ?) '
+                        . 'ON DUPLICATE KEY UPDATE `translation` = `translation`',
+                        $this->config['translations_table_name']
+                    );
+                    $result[] = $this->adapter->query($sql, [
+                        $row['translation_phrase_id'],
+                        $row['locale'],
+                        $row['translation'],
+                        $row['modified_by'],
+                        $row['modified_on'],
+                    ]);
                 }
             }
         }
@@ -1244,6 +1489,19 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         }
         if (! isset($where) && ! isset($sql)) {
             throw new \InvalidArgumentException('No query requested.');
+        }
+        //$where is handed to TableGateway::select() as a predicate. A Sql or Select
+        //object is not one, and the gateway does not complain — it ignores the
+        //argument and returns the entire table. getPhraseIndex() did exactly that for
+        //years, unscoped and unfiltered, and nothing failed loudly enough to notice.
+        //Refusing it here is what makes the next occurrence a stack trace instead of a
+        //quiet cross-project data leak.
+        if (isset($where) && ($where instanceof Sql || $where instanceof \Laminas\Db\Sql\Select)) {
+            throw new \InvalidArgumentException(
+                'fetchSome() takes a predicate, not a Sql or Select object. Build the Select and run it '
+                . 'with Sql::prepareStatementForSqlObject()->execute(); passing it here silently returns '
+                . 'the whole table.'
+            );
         }
         if (isset($sql)) {
             if (! isset($sqlArgs)) {

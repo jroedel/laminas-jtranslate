@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JTranslate\Migration;
 
+use JTranslate\Model\PhraseIdentity;
 use Laminas\Db\Adapter\AdapterInterface;
 use RuntimeException;
 
@@ -43,6 +44,16 @@ use function sprintf;
  * must be built against the resolved config. Each phrase's key-locale value is the
  * phrase itself, which is what the runtime discovery path writes, so it is derived
  * rather than duplicated in the data file.
+ *
+ * ## Correlated by hash, never by phrase text
+ *
+ * Every statement below that has to find a phrase row finds it by `phrase_hash`, and
+ * every "does this already exist" lookup keys on the hash too. Matching on `phrase`
+ * would compare under `utf8mb4_unicode_520_ci` — case-insensitive, accent-insensitive,
+ * PAD SPACE — so seeding `Save` would silently claim an existing row for `save` and
+ * attach this migration's translations to it. The hash is over the raw bytes, which is
+ * the same identity `Laminas\I18n\Translator` uses on its catalog keys and the same one
+ * `phrase_identity` enforces. See M003 for the longer version of this argument.
  */
 final class M002SeedUiPhrases implements MigrationInterface
 {
@@ -81,31 +92,58 @@ final class M002SeedUiPhrases implements MigrationInterface
         $transTable   = (string) ($config['translations_table_name'] ?? 'trans_translations');
         $now          = gmdate('Y-m-d H:i:s');
 
+        //MigrationRunner runs this last, after the schema migrations, precisely so the
+        //column is there. It can still be missing in one situation: --pretend does not
+        //execute anything, so on a database created before M003 the preview of *this*
+        //migration runs against a schema M003's printed-but-unexecuted SQL has not
+        //changed yet.
+        //
+        //That is a limitation of previewing a data migration across a schema boundary
+        //and cannot be designed away — this migration has to read the table to know
+        //what is missing. What it can do is say so, because the alternative is a raw
+        //"Unknown column 'phrase_hash' in 'SELECT'" that names neither the cause nor
+        //the fix.
+        if (! (new SchemaInspector($db))->hasColumn($phrasesTable, 'phrase_hash')) {
+            throw new RuntimeException(sprintf(
+                "`%s` has no `phrase_hash` column, so the seed cannot be built yet. Apply "
+                . '003-phrase-identity first and then run this again — with --pretend, take the SQL '
+                . "printed for 003 and 004, run it with an account that has DDL rights, record it with "
+                . '`jtranslate:migrate --mark-applied=003-phrase-identity` (and 004), then preview this one.',
+                $phrasesTable
+            ));
+        }
+
         $seed = require self::DATA_FILE;
         if (! is_array($seed)) {
             throw new RuntimeException(sprintf('%s did not return an array', self::DATA_FILE));
         }
 
-        $existing   = $this->existingPhraseIds($db, $phrasesTable, $project);
+        $existing   = $this->existingPhraseHashes($db, $phrasesTable, $project);
         $translated = $this->existingTranslationLocales($db, $phrasesTable, $transTable, $project);
 
         $statements = [];
         foreach ($seed as $phrase => $translations) {
             $phrase = (string) $phrase;
+            $hex    = PhraseIdentity::hex($phrase);
 
-            if (! array_key_exists($phrase, $existing)) {
+            if (! array_key_exists($hex, $existing)) {
                 $statements[] = [
                     'sql'        => sprintf(
-                        'INSERT INTO `%s` (`project`, `text_domain`, `phrase`, `added_on`) VALUES (?, ?, ?, ?)',
+                        'INSERT INTO `%s` (`project`, `text_domain`, `phrase`, `phrase_hash`, `added_on`) '
+                        . 'VALUES (?, ?, ?, UNHEX(?), ?)',
                         $phrasesTable
                     ),
-                    'parameters' => [$project, self::TEXT_DOMAIN, $phrase, $now],
+                    'parameters' => [$project, self::TEXT_DOMAIN, $phrase, $hex, $now],
                 ];
             }
             //The new id is not known until the insert above runs, so the translation
-            //rows below correlate by phrase text through a subselect rather than by
+            //rows below correlate by phrase hash through a subselect rather than by
             //id. That keeps this a flat statement list --pretend can print verbatim
             //and a DBA can paste, which an id-capturing loop could not.
+            //
+            //UNHEX(?) rather than a raw 32-byte parameter so the printed SQL stays
+            //copy-pasteable text. A binary parameter would render as mojibake in
+            //--pretend output and could not be run by hand at all.
 
             $wanted = [$keyLocale => $phrase];
             foreach (is_array($translations) ? $translations : [] as $locale => $translation) {
@@ -116,18 +154,18 @@ final class M002SeedUiPhrases implements MigrationInterface
             }
 
             foreach ($wanted as $locale => $translation) {
-                if (isset($translated[$phrase][$locale])) {
+                if (isset($translated[$hex][$locale])) {
                     continue;
                 }
                 $statements[] = [
                     'sql'        => sprintf(
                         'INSERT INTO `%s` (`translation_phrase_id`, `locale`, `translation`, `modified_on`) '
                         . 'SELECT `translation_phrase_id`, ?, ?, ? FROM `%s` '
-                        . 'WHERE `project` = ? AND `text_domain` = ? AND `phrase` = ? LIMIT 1',
+                        . 'WHERE `project` = ? AND `text_domain` = ? AND `phrase_hash` = UNHEX(?) LIMIT 1',
                         $transTable,
                         $phrasesTable
                     ),
-                    'parameters' => [$locale, $translation, $now, $project, self::TEXT_DOMAIN, $phrase],
+                    'parameters' => [$locale, $translation, $now, $project, self::TEXT_DOMAIN, $hex],
                 ];
             }
         }
@@ -136,13 +174,14 @@ final class M002SeedUiPhrases implements MigrationInterface
     }
 
     /**
-     * @return array<string, int> phrase => id
+     * @return array<string, int> hex phrase hash => id
      */
-    private function existingPhraseIds(AdapterInterface $db, string $table, string $project): array
+    private function existingPhraseHashes(AdapterInterface $db, string $table, string $project): array
     {
         $result = $db->query(
             sprintf(
-                'SELECT `translation_phrase_id`, `phrase` FROM `%s` WHERE `project` = ? AND `text_domain` = ?',
+                'SELECT `translation_phrase_id`, LOWER(HEX(`phrase_hash`)) AS `hex_hash` FROM `%s` '
+                . 'WHERE `project` = ? AND `text_domain` = ?',
                 $table
             ),
             [$project, self::TEXT_DOMAIN]
@@ -150,14 +189,14 @@ final class M002SeedUiPhrases implements MigrationInterface
 
         $found = [];
         foreach ($result as $row) {
-            $found[(string) $row['phrase']] = (int) $row['translation_phrase_id'];
+            $found[(string) $row['hex_hash']] = (int) $row['translation_phrase_id'];
         }
 
         return $found;
     }
 
     /**
-     * @return array<string, array<string, true>> phrase => locale => true
+     * @return array<string, array<string, true>> hex phrase hash => locale => true
      */
     private function existingTranslationLocales(
         AdapterInterface $db,
@@ -167,7 +206,7 @@ final class M002SeedUiPhrases implements MigrationInterface
     ): array {
         $result = $db->query(
             sprintf(
-                'SELECT p.`phrase`, t.`locale` FROM `%s` p '
+                'SELECT LOWER(HEX(p.`phrase_hash`)) AS `hex_hash`, t.`locale` FROM `%s` p '
                 . 'JOIN `%s` t ON p.`translation_phrase_id` = t.`translation_phrase_id` '
                 . 'WHERE p.`project` = ? AND p.`text_domain` = ?',
                 $phrasesTable,
@@ -178,7 +217,7 @@ final class M002SeedUiPhrases implements MigrationInterface
 
         $found = [];
         foreach ($result as $row) {
-            $found[(string) $row['phrase']][(string) $row['locale']] = true;
+            $found[(string) $row['hex_hash']][(string) $row['locale']] = true;
         }
 
         return $found;

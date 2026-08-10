@@ -27,9 +27,8 @@ use function sprintf;
  *   charset MySQL has deprecated and which cannot represent anything outside the
  *   BMP. Propagating it into every future installation to preserve uniformity would
  *   be choosing the wrong default forever. Nothing in the library depends on the
- *   charset: phrase hashing happens in PHP, and the only index on a text column is
- *   `(translation_phrase_id, locale)`, whose key length under utf8mb4 is 84 bytes
- *   against a 3072-byte limit.
+ *   charset: phrase hashing happens in PHP, and the widest index over character
+ *   columns is `phrase_identity`, at 432 bytes against a 3072-byte limit.
  * - **`modified_by` is an unsigned int, not `varchar(70)`.** The code has always
  *   written an integer user id here and read it back with an `(int)` cast; the live
  *   column is a string that MySQL coerces on every write. A new install should not
@@ -59,6 +58,22 @@ use function sprintf;
  * So that an installation which already has these tables — which is every existing
  * one — can record this migration as applied without a failure. The runner marks it
  * applied either way; the guard is what makes that honest rather than a lie.
+ *
+ * ## This DDL changed after release, on purpose
+ *
+ * `phrase`/`translation` are `TEXT` rather than `VARCHAR(2000)`, and `phrase_hash`
+ * with its `UNIQUE` constraint did not originally exist. M003 and M004 explain why —
+ * the short version is that a truncating phrase column silently produced 5,088
+ * unrecognisable duplicate rows on schoenstatt.link, and no index over a
+ * case-insensitive collation can express the byte-exact identity the translator uses.
+ *
+ * Editing shipped DDL is normally a mistake, because an installation that already ran
+ * it will never see the change. It is safe here only because M003 and M004 exist to
+ * carry exactly the same change to those installations, and because both of them
+ * inspect the schema first: a database created by this migration makes each of them
+ * emit nothing. The two paths converge on one shape. What must *not* happen is either
+ * side drifting from the other — a clause added here needs a matching guarded clause
+ * there, or a fresh install and an upgraded one stop being the same database.
  */
 final class M001CreatePhraseTables implements MigrationInterface
 {
@@ -89,11 +104,13 @@ final class M001CreatePhraseTables implements MigrationInterface
                       `translation_phrase_id` INT(11) NOT NULL AUTO_INCREMENT,
                       `project` VARCHAR(50) NOT NULL,
                       `text_domain` VARCHAR(50) NOT NULL,
-                      `phrase` VARCHAR(2000) NOT NULL,
+                      `phrase` TEXT NOT NULL,
+                      `phrase_hash` BINARY(32) NOT NULL,
                       `added_on` DATETIME NOT NULL,
                       `origin_route` VARCHAR(255) NULL DEFAULT NULL,
+                      `retired_on` DATETIME NULL DEFAULT NULL,
                       PRIMARY KEY (`translation_phrase_id`),
-                      KEY `project_text_domain` (`project`, `text_domain`)
+                      UNIQUE KEY `phrase_identity` (`project`, `text_domain`, `phrase_hash`)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
                     SQL,
                     $phrases
@@ -101,17 +118,18 @@ final class M001CreatePhraseTables implements MigrationInterface
                 'parameters' => [],
             ],
             [
-                //(project, text_domain) is indexed because every read the library
-                //performs filters on project, and the phrase index additionally
-                //groups by text domain. The live tables have no such index; adding
-                //one there is a separate migration nobody has needed yet.
+                //`phrase_identity` also serves every read the library performs, all of
+                //which filter on project and most of which then group by text domain —
+                //they are its leftmost prefix. So there is no separate
+                //(project, text_domain) index; M004 drops the one earlier versions of
+                //this migration created.
                 'sql'        => sprintf(
                     <<<'SQL'
                     CREATE TABLE IF NOT EXISTS `%s` (
                       `translation_id` INT(11) NOT NULL AUTO_INCREMENT,
                       `translation_phrase_id` INT(11) NOT NULL,
                       `locale` VARCHAR(20) NOT NULL,
-                      `translation` VARCHAR(2000) NOT NULL,
+                      `translation` TEXT NOT NULL,
                       `modified_by` INT(10) UNSIGNED NULL DEFAULT NULL,
                       `modified_on` DATETIME NOT NULL,
                       PRIMARY KEY (`translation_id`),

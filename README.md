@@ -71,8 +71,19 @@ imports — nothing aspirational.
 Step 4 needs DDL rights, which a web application's database user often deliberately
 lacks. `jtranslate:migrate --pretend` prints the SQL instead of running it, for
 somebody holding an account that does; afterwards
-`jtranslate:migrate --mark-applied=001-create-phrase-tables` records it. On an
-installation that already has the tables, `--mark-applied` *is* step 4.
+`jtranslate:migrate --mark-applied=001-create-phrase-tables` records it.
+
+On an installation that already has the tables, `--mark-applied` is **not** enough:
+migrations 003 and 004 change the schema those tables already have, and the library
+does not work correctly without them — see [Upgrading](UPGRADE.md). Mark 001 applied
+and run the rest.
+
+Note that the migrations are **not** applied in numeric order. 002 seeds data and runs
+last, after the schema migrations, because it writes the `phrase_hash` column 003
+creates. `MigrationRunner::MIGRATIONS` is the sequence; the numbers only identify.
+One consequence: on a database predating 003, `--pretend` cannot preview 002, because
+previewing does not execute the schema change it depends on. Apply 003 and 004 first,
+then preview 002.
 
 `config/database.sql.dist` is gone. It was a phpMyAdmin export carrying a trailing
 comma after `origin_route`, so it had never been runnable; migration 001 replaces it.
@@ -83,6 +94,7 @@ comma after `origin_route`, so it had never been runnable; migration 001 replace
 | --- | --- |
 | `jtranslate:migrate` | apply pending migrations. `--status` reports; `--pretend` prints the SQL and changes nothing; `--mark-applied=NAME` records one as applied without running it |
 | `jtranslate:export-catalogs` | rebuild every compiled `*.lang.php` from the database. `--domain=NAME` restricts it, `--dry-run` lists what it would write |
+| `jtranslate:retire` | take phrases off the translator's worklist without destroying them. Select with `--id` (repeatable), `--origin-route` (a `LIKE` pattern) or `--text-domain`; `--undo` reverses it; `--dry-run` prints the selection. See [Retirement](#retirement) |
 
 Run `jtranslate:export-catalogs` **as the user the web server runs as**, not as root.
 Running it as root creates catalogs the web server cannot subsequently replace, which
@@ -173,6 +185,60 @@ between projects, and a phrase is arbitrary text taken from whatever the other p
 renders, so it can carry information that project's users never agreed to publish
 elsewhere. `getTranslations($fromAllProjects = true)` is the one deliberate exception
 and is reachable only from the admin GUI.
+
+### What makes two phrases the same phrase
+
+Byte identity, because that is the relation `Laminas\I18n\Translator` applies to its
+catalog keys: a lookup for `Save` will never find an entry for `save`, so the two are
+different phrases and need different rows. `JTranslate\Model\PhraseIdentity` is the one
+implementation of it — a bare SHA-256 of the phrase's raw bytes, stored in
+`trans_phrases.phrase_hash` as `BINARY(32)` under
+`UNIQUE (project, text_domain, phrase_hash)`.
+
+Nothing in MySQL expresses that relation. `utf8mb4_unicode_520_ci` is
+case-insensitive, accent-insensitive and PAD SPACE, so a `UNIQUE` index on `phrase`
+would refuse `Inglés` after `Inglês` — genuinely distinct phrases in one text domain,
+of which schoenstatt.link's table holds fourteen pairs. And no prefix is long enough
+for a `TEXT` column anyway.
+
+Three rules, each of which reintroduces a defect if broken:
+
+- **Never normalize before hashing.** Not trimmed, not case-folded, not NFC. The hash
+  must identify the exact string the translator will use.
+- **Never hash in SQL.** `SHA2()` hashes the value in the *column's* character set, so
+  a later charset conversion silently changes every stored hash while PHP keeps
+  computing the old one. (M003's one-time backfill is the argued exception.)
+- **Never look up by hash alone.** A collision then serves the wrong translation
+  instead of refusing an insert.
+
+### Retirement
+
+Nothing was ever removed from these tables, and the reason was never that nobody wanted
+to: `deletePhrase()` cascades the translations away and `trans_translations` has no
+history to recover them from, so a wrong deletion silently destroys human work. Against
+that, doing nothing is always the rational choice and the table only grows.
+
+`retired_on` inverts the economics. A retired phrase leaves the translator's worklist
+and the paged reads, **keeps its translations**, and **keeps compiling into the
+catalogs** — so the site renders exactly what it rendered before. If a page renders it
+again and the translation is missing, the render path clears `retired_on` and the
+phrase comes back intact.
+
+That is what makes bulk cleanup safe. `origin_route` records where a phrase was *first
+seen*, not where it is used, so retiring everything from a removed feature always
+catches live strings that merely appeared there first. With retirement those return on
+their own; with deletion each one is a judgement call made under threat of
+unrecoverable loss.
+
+Two limits worth knowing before relying on the return path:
+
+- A phrase already translated in **every** configured locale will not wake itself. The
+  path fires on `EVENT_MISSING_TRANSLATION`, which by design never fires on a
+  successful lookup — putting a write on that path is the `last_seen` column this
+  architecture deliberately does not have. Use `jtranslate:retire --undo`.
+- Retiring from the CLI does not clear the **web server's** cache: APCu's segment
+  belongs to the SAPI that created it, so the running site keeps an index saying those
+  rows are live and the return path is not armed until the item expires.
 
 ### Language codes at a public boundary
 

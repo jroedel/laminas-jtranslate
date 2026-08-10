@@ -50,10 +50,34 @@ final class MigrationRunner
      * ship, and the ordering of migrations is exactly the thing that must not be
      * incidental.
      *
+     * ## This list is not in numeric order, on purpose
+     *
+     * The seed runs **last**, after the schema migrations, because it writes
+     * `phrase_hash` and correlates its rows by it — on a database created before M003
+     * that column does not exist yet, and M002 fails with "Unknown column". The
+     * dependency is real, so the list states it rather than the numbering implying an
+     * order that does not work.
+     *
+     * The numbers are not renumbered to match, because `name()` is recorded in the
+     * tracking table and renaming a released migration makes it pending again
+     * everywhere. Numbers identify; this list sequences. Where they disagree, this
+     * list is the one that runs.
+     *
+     * All three states reach the same schema:
+     *
+     * - **fresh install** — M001 creates both tables in their final shape, M003 and
+     *   M004 inspect it and emit nothing, M002 seeds.
+     * - **created before M003, nothing recorded** (the local capsule) — M001 no-ops on
+     *   `IF NOT EXISTS`, M003 alters, M004 merges, M002 seeds.
+     * - **M001 and M002 already applied** (production) — only M003 and M004 are
+     *   pending and the ordering question does not arise.
+     *
      * @var list<class-string<MigrationInterface>>
      */
     private const MIGRATIONS = [
         M001CreatePhraseTables::class,
+        M003PhraseIdentity::class,
+        M004MergeDuplicatePhrases::class,
         M002SeedUiPhrases::class,
     ];
 
