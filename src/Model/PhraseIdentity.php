@@ -6,6 +6,7 @@ namespace JTranslate\Model;
 
 use function bin2hex;
 use function hash;
+use function str_replace;
 
 /**
  * What makes two phrases the same phrase.
@@ -32,12 +33,28 @@ use function hash;
  * attacker-chosen, and md5 chosen-prefix collisions are cheap to produce. SHA-256
  * costs the same to compute at this volume and sixteen more bytes to store.
  *
- * ## No normalization, ever
+ * ## One normalization, and only one
  *
- * Not trimmed, not case-folded, not Unicode-normalized. The hash must identify the
- * exact string the translator will use as its key; anything that maps two distinct
- * runtime strings onto one hash reintroduces the defect M003 describes, where the
- * stored row could never be recognised again and every render inserted another copy.
+ * Line endings, and nothing else. Not trimmed, not case-folded, not
+ * Unicode-normalized. The rule the rest of that list protects still holds — the hash
+ * must identify the string the translator uses as its key, and anything that maps two
+ * meaningfully different runtime strings onto one hash makes one of them permanently
+ * untranslatable.
+ *
+ * Line endings are the one case where two strings differ in bytes and in nothing a
+ * translator could act on. `Only delete an assignment if it was created by mistake!
+ * …` sat in the table twice, once with `\n` and once with `\r\n`, from the same
+ * template before and after its file's line endings changed. `UNIQUE (project,
+ * text_domain, phrase_hash)` cannot collapse those — the strings genuinely differ and
+ * the hash was doing its job — so both rows are real, both ask a translator for the
+ * same sentence, and whichever one they answer, half the renders miss.
+ *
+ * The cost is the one that section warns about, and it is paid where it can be seen:
+ * a template emitting CRLF now finds no row of its own, so it would render its source
+ * text forever and never be recorded. {@see TranslationsTable::getTranslatedText()}
+ * closes that by emitting a CRLF key alongside the stored one for every phrase that
+ * contains a newline, so the compiled catalog answers both spellings from the one row.
+ * Together those two are what make this safe; neither is safe alone.
  *
  * ## Two encodings, deliberately
  *
@@ -59,7 +76,7 @@ final class PhraseIdentity
      */
     public static function raw(string $phrase): string
     {
-        return hash(self::ALGORITHM, $phrase, true);
+        return hash(self::ALGORITHM, self::normalize($phrase), true);
     }
 
     /**
@@ -67,7 +84,27 @@ final class PhraseIdentity
      */
     public static function hex(string $phrase): string
     {
-        return hash(self::ALGORITHM, $phrase);
+        return hash(self::ALGORITHM, self::normalize($phrase));
+    }
+
+    /**
+     * The form of a phrase that gets hashed, and that gets stored.
+     *
+     * CRLF and a lone CR both become LF. Public because a phrase is *written* in this
+     * form too — a stored phrase whose bytes disagreed with what its own hash was
+     * computed over would be a row nothing could ever look up — and because the
+     * migration that collapses the existing pairs has to reproduce it in SQL:
+     *
+     * ```sql
+     * REPLACE(REPLACE(phrase, CHAR(13,10), CHAR(10)), CHAR(13), CHAR(10))
+     * ```
+     *
+     * Order matters in both spellings: taking the lone CR first would turn every CRLF
+     * into a blank line.
+     */
+    public static function normalize(string $phrase): string
+    {
+        return str_replace(["\r\n", "\r"], "\n", $phrase);
     }
 
     /**

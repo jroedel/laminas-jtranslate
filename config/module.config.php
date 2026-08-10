@@ -12,6 +12,13 @@ return [
     'jtranslate' => [
         'phrases_table_name' => 'trans_phrases',
         'translations_table_name' => 'trans_translations',
+
+        //Append-only. Every write that destroys a translation copies the old text here
+        //first, because `trans_translations` keeps none: an overwrite used to leave no
+        //record at all, which is why the tooling on the other side of the v3 API dry-runs
+        //by default and treats "fill gaps, never overwrite" as a hard rule rather than a
+        //preference. See M006CreateTranslationHistory.
+        'translations_history_table_name' => 'trans_translations_history',
         'root_directory' => getcwd(),
         'locales_to_translate' => [
             'es_ES',

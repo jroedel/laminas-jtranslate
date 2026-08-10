@@ -79,6 +79,13 @@ final class MigrationRunner
         M003PhraseIdentity::class,
         M004MergeDuplicatePhrases::class,
         M002SeedUiPhrases::class,
+        //After M004, which is what puts the UNIQUE constraint in place that M005's
+        //merge-before-rehash order exists to satisfy, and after M002, whose seeded
+        //phrases are hashed by the current PhraseIdentity and so are already normal.
+        M005NormalizeLineEndings::class,
+        //Order-independent — it creates a table nothing else here touches — so it goes
+        //last, where a new migration goes.
+        M006CreateTranslationHistory::class,
     ];
 
     /**
