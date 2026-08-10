@@ -187,7 +187,7 @@ final class MigrationRunner
               `migration` VARCHAR(100) NOT NULL,
               `applied_on` DATETIME NOT NULL,
               PRIMARY KEY (`migration`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
             SQL,
             self::TRACKING_TABLE
         );
