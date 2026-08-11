@@ -21,10 +21,22 @@ use function sprintf;
  *
  * ## What a row is
  *
- * One row per destroyed text, written immediately before the write that destroys it —
- * an update that replaces a translation, or a retraction that deletes one. Never on an
- * insert: there was nothing to lose. The columns split into what was lost and who took
- * it away, because both questions get asked and neither answers the other:
+ * One row per event that changes what a translator would see. Two of the three destroy
+ * text and are written immediately before the write that does it — an update that
+ * replaces a translation, or a retraction that deletes one. Never on an insert: there
+ * was nothing to lose.
+ *
+ * The third is `retire`, which destroys nothing: it records that the *phrase* left the
+ * worklist because the application knows nothing renders it any more. It carries no
+ * language (`locale` is `''`, which no translation row can hold) and no previous text,
+ * and its `notes` is the whole content. It is here rather than in a table of its own
+ * because it answers a question about the same object, asked by the same reader, at the
+ * same moment: a phrase with four good translations vanishes from the listing, and
+ * without this the only honest answer to "what happened to it" is "something retired it
+ * and nothing wrote down what".
+ *
+ * The columns split into what was lost and who took it away, because both questions get
+ * asked and neither answers the other:
  *
  * - `old_translation`, `written_by`, `written_on` — the row as it stood, so a revert
  *   has the text and an attribution has the author.

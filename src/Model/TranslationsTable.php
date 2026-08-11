@@ -58,6 +58,20 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
     public const NOTE_LENGTH = 255;
 
     /**
+     * The `locale` of a history row that is about the phrase rather than a language.
+     *
+     * The empty string, which no translation row can hold, so it cannot be mistaken for
+     * one. Only retirement uses it so far. A language-filtered read includes these
+     * deliberately: an event about the whole phrase belongs in every language's thread.
+     */
+    public const PHRASE_EVENT_LOCALE = '';
+
+    /** The values `trans_translations_history.operation` takes. */
+    public const OPERATION_UPDATE  = 'update';
+    public const OPERATION_RETRACT = 'retract';
+    public const OPERATION_RETIRE  = 'retire';
+
+    /**
      *
      * @var array $newMissingTranslations
      */
@@ -730,7 +744,7 @@ HAVING PhraseLocaleCount < ?";
                 //Before the delete, never after: the row is the only copy.
                 $this->recordTranslationHistory(
                     (int) $phrase[$key . 'Id'],
-                    'retract',
+                    self::OPERATION_RETRACT,
                     $actingUserId,
                     $dateString,
                     $notes
@@ -758,7 +772,7 @@ HAVING PhraseLocaleCount < ?";
                 //transaction this method has never had.
                 $this->recordTranslationHistory(
                     (int) $phrase[$key . 'Id'],
-                    'update',
+                    self::OPERATION_UPDATE,
                     $actingUserId,
                     $dateString,
                     $notes
@@ -817,13 +831,7 @@ HAVING PhraseLocaleCount < ?";
     protected function recordTranslationHistory($translationId, $operation, $actingUserId, $now, $notes = null)
     {
         $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
-        if (! isset($this->historyTableExists)) {
-            $this->historyTableExists = (bool) $this->adapter->query(
-                'SHOW TABLES LIKE ?',
-                [$history]
-            )->count();
-        }
-        if (! $this->historyTableExists) {
+        if (! $this->hasHistoryTable()) {
             return;
         }
 
@@ -891,8 +899,13 @@ HAVING PhraseLocaleCount < ?";
         $parameters = [$phrase['project'], $phrase['phrase_hash']];
         $where      = 'h.`project` = ? AND h.`phrase_hash` = ?';
         if (null !== $locale && '' !== $locale) {
-            $where       .= ' AND h.`locale` = ?';
+            //`OR locale = ''` keeps the phrase-level events — a retirement — in every
+            //language's thread. They are not about a language, and dropping them from a
+            //filtered read would mean the one view most likely to be consulted is the one
+            //that cannot say why the phrase left the worklist.
+            $where       .= ' AND (h.`locale` = ? OR h.`locale` = ?)';
             $parameters[] = $locale;
+            $parameters[] = self::PHRASE_EVENT_LOCALE;
         }
 
         //`history_id` descending, not `replaced_on`: two writes inside the same second
@@ -1007,27 +1020,117 @@ HAVING PhraseLocaleCount < ?";
      * @param string $textDomain
      * @return bool whether a live row was found and retired
      */
-    public function retirePhraseByText($phrase, $textDomain)
+    public function retirePhraseByText($phrase, $textDomain, $reason = null)
     {
+        $hash = PhraseIdentity::raw((string) $phrase);
+
+        //Read first, and only act on a row that is *live*. That test is what bounds this
+        //to one event per state change: retiring an already-retired phrase matches
+        //nothing, so it writes no history row however many times it is called. An
+        //application that calls this on every save of an unchanged record therefore
+        //produces one row the first time and none afterwards.
+        //
+        //It is also why nothing here can cycle. Retirement writes to `trans_phrases` and
+        //to the history table, and neither is read by anything that could retire again:
+        //the only path back to `retired_on` is discovery clearing it, which happens when
+        //a render misses on the string, and a render is not something this can cause.
+        //Retire and rediscover can alternate — a moderator reverting an edit — but each
+        //step needs an event outside this method, and each writes one row.
         $sql = sprintf(
-            'UPDATE `%s` SET `retired_on` = UTC_TIMESTAMP() '
+            'SELECT `translation_phrase_id`, `project`, `text_domain`, `phrase_hash` FROM `%s` '
             . 'WHERE `project` = ? AND `text_domain` = ? AND `phrase_hash` = ? AND `retired_on` IS NULL',
             $this->config['phrases_table_name']
         );
-
-        $result = $this->adapter->query($sql, [
+        $row = $this->adapter->query($sql, [
             $this->config['project_name'],
             $textDomain,
-            PhraseIdentity::raw((string) $phrase),
-        ]);
+            $hash,
+        ])->current();
+        if (null === $row) {
+            return false;
+        }
+        $row = (array) $row;
 
-        $affected = $result->getAffectedRows();
-        if ($affected > 0) {
-            //The listing and the compiled catalogs both read a cached view of this.
-            $this->invalidatePhraseCaches();
+        $sql = sprintf(
+            'UPDATE `%s` SET `retired_on` = UTC_TIMESTAMP() WHERE `translation_phrase_id` = ?',
+            $this->config['phrases_table_name']
+        );
+        $this->adapter->query($sql, [$row['translation_phrase_id']]);
+
+        $this->recordRetirement($row, $reason);
+
+        //The listing and the compiled catalogs both read a cached view of this.
+        $this->invalidatePhraseCaches();
+
+        return true;
+    }
+
+    /**
+     * Note a retirement in the history, so the thread says why a phrase left the worklist.
+     *
+     * A retirement destroys nothing, which is why it does not fit the shape of every
+     * other row here — there is no previous text and no language. It is recorded anyway,
+     * because the question it answers is one somebody will certainly ask: a phrase with
+     * four good translations vanishes from `/admin/translations` and the only honest
+     * answer to "what happened to it" was, until now, "something retired it, and nothing
+     * wrote down what or why".
+     *
+     * So the row is deliberately shaped as an *event*, not a loss:
+     *
+     * - `operation` is `retire`, which is what a reader has to branch on. The API and the
+     *   GUI both render it as a line of narrative rather than as recoverable text.
+     * - `locale` is `''` — the empty string, meaning "the phrase, not a language".
+     *   Retirement is not language-specific, and `''` is not a locale any translation row
+     *   can hold, so it cannot collide with one. A language-filtered read includes these
+     *   for the same reason: an event about the whole phrase belongs in every language's
+     *   thread.
+     * - `old_translation` is `''`. Nothing was destroyed, and putting the phrase text
+     *   there would read as a translation that had been.
+     *
+     * Silent when the history table is absent, like every other write to it: an
+     * installation that has not run M006 must still be able to retire a phrase.
+     *
+     * @param array<string, mixed> $phraseRow project, text_domain, phrase_hash and id
+     * @param string|null $reason why, from the caller
+     */
+    protected function recordRetirement(array $phraseRow, $reason = null)
+    {
+        $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
+        if (! $this->hasHistoryTable()) {
+            return;
         }
 
-        return $affected > 0;
+        $note = null === $reason || '' === $reason ? null : mb_substr((string) $reason, 0, self::NOTE_LENGTH);
+
+        $sql = sprintf(
+            'INSERT INTO `%s` (`project`, `phrase_hash`, `locale`, `text_domain`, '
+            . '`translation_phrase_id`, `old_translation`, `operation`, `notes`, `replaced_by`, `replaced_on`) '
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            $history
+        );
+        $this->adapter->query($sql, [
+            $phraseRow['project'],
+            $phraseRow['phrase_hash'],
+            self::PHRASE_EVENT_LOCALE,
+            $phraseRow['text_domain'],
+            $phraseRow['translation_phrase_id'],
+            '',
+            self::OPERATION_RETIRE,
+            $note,
+            $this->getActingUserId(),
+            date_format(new \DateTime('now', new \DateTimeZone('UTC')), 'Y-m-d H:i:s'),
+        ]);
+    }
+
+    /** Resolved once per request; see recordTranslationHistory() for why it is asked at all. */
+    private function hasHistoryTable()
+    {
+        $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
+        if (! isset($this->historyTableExists)) {
+            $this->historyTableExists = (bool) $this->adapter->query('SHOW TABLES LIKE ?', [$history])->count();
+        }
+
+        return $this->historyTableExists;
     }
 
     /**

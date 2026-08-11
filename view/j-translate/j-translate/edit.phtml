@@ -1,5 +1,7 @@
 <?php
 
+use JTranslate\Model\TranslationsTable;
+
 $entity = $this->phrase;
 $headText = 'Edit Translation';
 $this->headTitle($headText); ?>
@@ -47,8 +49,33 @@ if ([] !== $history) : ?>
 </tr></thead>
 <tbody>
 <?php foreach ($history as $row) :
-    $isRetraction = 'retract' === ($row['operation'] ?? null);
-    ?>
+    $operation    = $row['operation'] ?? null;
+    $isRetraction = TranslationsTable::OPERATION_RETRACT === $operation;
+    //A retirement is an event about the phrase, not a lost translation: it has no
+    //language and no previous text, and rendering it in the same shape as the rest
+    //would show two empty cells and imply something was destroyed. It is the answer to
+    //"why did this leave the worklist", which is the question a reader most often
+    //arrives with.
+    $isRetirement = TranslationsTable::OPERATION_RETIRE === $operation;
+    if ($isRetirement) :?>
+<tr class="text-muted">
+    <td colspan="2"><span class="glyphicon glyphicon-inbox"></span>&nbsp;<?php
+        echo $this->translate('Taken off the worklist');?></td>
+    <td><?php $note = $row['notes'] ?? null;
+        echo null === $note || '' === $note
+            ? '<span class="text-muted">&mdash;</span>'
+            : $this->escapeHtml((string) $note);?></td>
+    <td><?php
+    if (isset($row['replaced_on']) && $row['replaced_on']) {
+        echo $this->escapeHtml((string) $row['replaced_on']);
+    }
+    $by = $row['replacedBy'] ?? null;
+    if (null !== $by) {
+        echo '<br><small class="text-muted">' . $this->escapeHtml((string) $by) . '</small>';
+    }?></td>
+</tr>
+<?php continue;
+    endif;?>
 <tr>
     <td><?php echo $this->escapeHtml((string) ($row['locale'] ?? ''));
     if ($isRetraction) :
