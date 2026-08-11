@@ -680,11 +680,17 @@ HAVING PhraseLocaleCount < ?";
      *   did not fill in. If `''` meant "clear", opening a phrase and saving one language
      *   would wipe the other three. That is the single most destructive thing this method
      *   could plausibly be made to do.
-     * - **an explicit null** — "retract this translation". Deletes the row. Reachable
-     *   from an API caller, which can distinguish a JSON `null` from `""`, and from
-     *   nothing a browser can post. Deleting rather than storing `''` keeps one
-     *   representation of "untranslated" in the table instead of two; `untranslatedIn`
-     *   already has to test for both because older code created blanks.
+     * - **an explicit null** — "retract this translation". Deletes the row. Deleting
+     *   rather than storing `''` keeps one representation of "untranslated" in the table
+     *   instead of two; `untranslatedIn` already has to test for both because older code
+     *   created blanks.
+     *
+     *   This is the *table's* convention and it stays. What changed on 2026-08-11 is one
+     *   layer up: `PhrasesV3Controller` no longer lets a caller reach it by sending a
+     *   null, because a null is what a serializer emits for an absent field. An API
+     *   retraction now takes the explicit `_retract` key and arrives here as this null —
+     *   so the destructive spelling is deliberate at the surface and unchanged
+     *   underneath.
      * - **any other string** — write it. Including `'0'`, which the old condition
      *   (`! $data[$key]`) silently discarded along with `''`, because both are falsy in
      *   PHP. A translation of literally "0" is legitimate — it is a plausible rendering
