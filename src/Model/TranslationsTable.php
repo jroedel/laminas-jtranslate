@@ -61,15 +61,34 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      * The `locale` of a history row that is about the phrase rather than a language.
      *
      * The empty string, which no translation row can hold, so it cannot be mistaken for
-     * one. Only retirement uses it so far. A language-filtered read includes these
+     * one. Retirement and un-retirement use it. A language-filtered read includes these
      * deliberately: an event about the whole phrase belongs in every language's thread.
      */
     public const PHRASE_EVENT_LOCALE = '';
 
-    /** The values `trans_translations_history.operation` takes. */
-    public const OPERATION_UPDATE  = 'update';
-    public const OPERATION_RETRACT = 'retract';
-    public const OPERATION_RETIRE  = 'retire';
+    /**
+     * The values `trans_translations_history.operation` takes.
+     *
+     * They split on **what the event is about**, and that split is the one distinction a
+     * reader of this table has to get right:
+     *
+     * - `update` and `retract` are about a **translation**. One replaced text with other
+     *   text; the other removed a language's text altogether. Both destroy something, both
+     *   name a `locale`, and both carry the text they destroyed in `old_translation`.
+     * - `retire` and `unretire` are about the **phrase**. They move a row on and off the
+     *   translator's worklist and destroy nothing at all: every translation stays, the
+     *   compiled catalogs still carry it, and the site renders exactly what it rendered
+     *   before. Their `locale` is {@see self::PHRASE_EVENT_LOCALE} and their
+     *   `old_translation` is `''`, because there is no language and nothing was lost.
+     *
+     * A caller that treats `retire` as a data loss will report an incident that did not
+     * happen; one that treats `retract` as a worklist change will lose a translation and
+     * think it tidied up. See {@see updatePhrase()} for the write side of the same line.
+     */
+    public const OPERATION_UPDATE   = 'update';
+    public const OPERATION_RETRACT  = 'retract';
+    public const OPERATION_RETIRE   = 'retire';
+    public const OPERATION_UNRETIRE = 'unretire';
 
     /**
      *
@@ -685,6 +704,14 @@ HAVING PhraseLocaleCount < ?";
      *   instead of two; `untranslatedIn` already has to test for both because older code
      *   created blanks.
      *
+     *   **A retraction is not a retirement, and the two are easy to reach for by mistake.**
+     *   This deletes one language's text and the phrase stays on the worklist — indeed it
+     *   moves *up* it, because the language is now a gap. {@see retirePhraseById()} takes
+     *   the phrase off the worklist and touches no translation at all. So retracting every
+     *   language to make a row go away does the opposite of that while destroying five
+     *   translations on the way: the row remains, wholly untranslated, at the top of the
+     *   list. If the goal is "nobody should be asked to translate this", retire it.
+     *
      *   This is the *table's* convention and it stays. What changed on 2026-08-11 is one
      *   layer up: `PhrasesV3Controller` no longer lets a caller reach it by sending a
      *   null, because a null is what a serializer emits for an absent field. An API
@@ -1077,7 +1104,7 @@ HAVING PhraseLocaleCount < ?";
         );
         $this->adapter->query($sql, [$row['translation_phrase_id']]);
 
-        $this->recordRetirement($row, $reason);
+        $this->recordPhraseEvent($row, self::OPERATION_RETIRE, $reason);
 
         //The listing and the compiled catalogs both read a cached view of this.
         $this->invalidatePhraseCaches();
@@ -1086,10 +1113,107 @@ HAVING PhraseLocaleCount < ?";
     }
 
     /**
-     * Note a retirement in the history, so the thread says why a phrase left the worklist.
+     * Retire one phrase by id, recording why.
      *
-     * A retirement destroys nothing, which is why it does not fit the shape of every
-     * other row here — there is no previous text and no language. It is recorded anyway,
+     * The surface an *agent* retires through, where {@see retirePhraseByText()} is the one
+     * the application uses when it knows a record's text has been superseded and
+     * {@see retire()} is the blunt bulk instrument. The difference that matters is the
+     * reason: this is a **judgement about a row** — somebody has decided the phrase should
+     * not have been filed — and the reason is the only record of what was believed.
+     *
+     * What makes it safe to let a judgement like that be made cheaply is that retirement
+     * destroys nothing and repairs itself; the argument is on {@see retire()} and is not
+     * repeated here. What is worth repeating is the asymmetry with the other destructive
+     * verb on this class: **retracting removes a translation and cannot be undone by the
+     * site, retiring removes a phrase from a worklist and is undone by the site.** They are
+     * not two strengths of the same operation.
+     *
+     * Read-first, and only a *live* row is acted on. That bounds this to one event per
+     * state change: retiring an already-retired phrase matches nothing and writes no
+     * second history row however many times it is called, so a caller may retry.
+     *
+     * Project-scoped, because an id alone addresses a table three applications share.
+     *
+     * @param int $id
+     * @param string|null $reason why, from the caller. The whole point; a null is accepted
+     *        because this class cannot make its callers' policy, and the v3 API's retire
+     *        endpoint requires one.
+     * @return bool whether a live row of this project was found and retired
+     */
+    public function retirePhraseById($id, $reason = null)
+    {
+        return $this->setRetirementById((int) $id, true, $reason);
+    }
+
+    /**
+     * Bring one retired phrase back by id, recording why.
+     *
+     * The reverse judgement, and it needs recording for the same reason: a row that leaves
+     * the worklist and returns has had two decisions made about it, and the second one
+     * explains the first. Recorded as `unretire` rather than as an absence of `retire`,
+     * because a thread that says only "retired" leaves a reader wondering whether the
+     * phrase is still off the list.
+     *
+     * Note this is **not** the usual way a phrase comes back. The usual way is a render:
+     * discovery clears `retired_on` on its own when a page misses on the string, and that
+     * path writes no history at all — the retirement was simply wrong and the site said so.
+     * A row that reappears with no `unretire` entry is that case, and it is the signal
+     * worth acting on: something still renders the phrase.
+     *
+     * @param int $id
+     * @param string|null $reason
+     * @return bool whether a retired row of this project was found and brought back
+     */
+    public function unretirePhraseById($id, $reason = null)
+    {
+        return $this->setRetirementById((int) $id, false, $reason);
+    }
+
+    /**
+     * @param int $id
+     * @param bool $retire true to retire, false to un-retire
+     * @param string|null $reason
+     * @return bool whether a row in the opposite state was found
+     */
+    protected function setRetirementById($id, $retire, $reason = null)
+    {
+        $sql = sprintf(
+            'SELECT `translation_phrase_id`, `project`, `text_domain`, `phrase_hash` FROM `%s` '
+            . 'WHERE `project` = ? AND `translation_phrase_id` = ? AND `retired_on` IS %s',
+            $this->config['phrases_table_name'],
+            $retire ? 'NULL' : 'NOT NULL'
+        );
+        $row = $this->adapter->query($sql, [$this->config['project_name'], (int) $id])->current();
+        if (null === $row) {
+            return false;
+        }
+        $row = (array) $row;
+
+        $sql = sprintf(
+            'UPDATE `%s` SET `retired_on` = %s WHERE `translation_phrase_id` = ?',
+            $this->config['phrases_table_name'],
+            $retire ? 'UTC_TIMESTAMP()' : 'NULL'
+        );
+        $this->adapter->query($sql, [$row['translation_phrase_id']]);
+
+        $this->recordPhraseEvent(
+            $row,
+            $retire ? self::OPERATION_RETIRE : self::OPERATION_UNRETIRE,
+            $reason
+        );
+
+        //The listing, the API collection and the compiled catalogs all read a cached view.
+        $this->invalidatePhraseCaches();
+
+        return true;
+    }
+
+    /**
+     * Note a retirement or un-retirement in the history, so the thread says why a phrase
+     * left the worklist or came back to it.
+     *
+     * Neither destroys anything, which is why they do not fit the shape of every
+     * other row here — there is no previous text and no language. They are recorded anyway,
      * because the question it answers is one somebody will certainly ask: a phrase with
      * four good translations vanishes from `/admin/translations` and the only honest
      * answer to "what happened to it" was, until now, "something retired it, and nothing
@@ -1097,8 +1221,10 @@ HAVING PhraseLocaleCount < ?";
      *
      * So the row is deliberately shaped as an *event*, not a loss:
      *
-     * - `operation` is `retire`, which is what a reader has to branch on. The API and the
-     *   GUI both render it as a line of narrative rather than as recoverable text.
+     * - `operation` is `retire` or `unretire`, which is what a reader has to branch on. The
+     *   API and the GUI both render either as a line of narrative rather than as
+     *   recoverable text. Anything that reads `old_translation` on one of these rows is
+     *   reading a field that is empty by design.
      * - `locale` is `''` — the empty string, meaning "the phrase, not a language".
      *   Retirement is not language-specific, and `''` is not a locale any translation row
      *   can hold, so it cannot collide with one. A language-filtered read includes these
@@ -1111,9 +1237,10 @@ HAVING PhraseLocaleCount < ?";
      * installation that has not run M006 must still be able to retire a phrase.
      *
      * @param array<string, mixed> $phraseRow project, text_domain, phrase_hash and id
+     * @param string $operation self::OPERATION_RETIRE or self::OPERATION_UNRETIRE
      * @param string|null $reason why, from the caller
      */
-    protected function recordRetirement(array $phraseRow, $reason = null)
+    protected function recordPhraseEvent(array $phraseRow, $operation = self::OPERATION_RETIRE, $reason = null)
     {
         $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
         if (! $this->hasHistoryTable()) {
@@ -1135,7 +1262,7 @@ HAVING PhraseLocaleCount < ?";
             $phraseRow['text_domain'],
             $phraseRow['translation_phrase_id'],
             '',
-            self::OPERATION_RETIRE,
+            $operation,
             $note,
             $this->getActingUserId(),
             date_format(new \DateTime('now', new \DateTimeZone('UTC')), 'Y-m-d H:i:s'),
@@ -1260,6 +1387,16 @@ HAVING PhraseLocaleCount < ?";
      * live — and a render that consults a stale index queues no un-retire. Nothing is
      * corrupted and it self-corrects when the item expires, but until then the return
      * path is simply not armed. Clear the web cache after a bulk retirement.
+     *
+     * ## This is the blunt one; two others are sharper
+     *
+     * {@see retirePhraseById()} retires one row **and records why** — the surface for a
+     * judgement about a single phrase, which is what an agent working through a worklist
+     * makes. {@see retirePhraseByText()} is for content the application knows has been
+     * superseded. This method is for bulk cleanup after a removed feature, and it is the
+     * only one of the three that can write no history: it takes ids and no reason. The
+     * console command loops the per-id method precisely so that a bulk retirement is still
+     * explicable afterwards.
      *
      * @param int[] $ids
      * @return int rows affected

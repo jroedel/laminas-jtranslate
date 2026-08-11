@@ -56,11 +56,19 @@ if ([] !== $history) : ?>
     //would show two empty cells and imply something was destroyed. It is the answer to
     //"why did this leave the worklist", which is the question a reader most often
     //arrives with.
-    $isRetirement = TranslationsTable::OPERATION_RETIRE === $operation;
-    if ($isRetirement) :?>
+    //`unretire` is the same kind of event in the other direction — by hand, which is the
+    //part worth showing: a phrase that came back because a page rendered it writes no
+    //history at all, so a thread with a retirement and nothing after it means the site
+    //disagreed with whoever retired it.
+    $isRetirement = TranslationsTable::OPERATION_RETIRE === $operation
+        || TranslationsTable::OPERATION_UNRETIRE === $operation;
+    if ($isRetirement) :
+        $wentBack = TranslationsTable::OPERATION_UNRETIRE === $operation;?>
 <tr class="text-muted">
-    <td colspan="2"><span class="glyphicon glyphicon-inbox"></span>&nbsp;<?php
-        echo $this->translate('Taken off the worklist');?></td>
+    <td colspan="2"><span class="glyphicon glyphicon-<?php echo $wentBack ? 'share-alt' : 'inbox';?>"></span>&nbsp;<?php
+        echo $wentBack
+            ? $this->translate('Put back on the worklist')
+            : $this->translate('Taken off the worklist');?></td>
     <td><?php $note = $row['notes'] ?? null;
         echo null === $note || '' === $note
             ? '<span class="text-muted">&mdash;</span>'

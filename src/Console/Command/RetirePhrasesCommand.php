@@ -46,6 +46,23 @@ use function sprintf;
  * `--dry-run` prints the selection and changes nothing. Without it the command still
  * prints what it matched before writing, because a `LIKE` pattern with one character
  * wrong selects a plausible-looking set rather than an empty one.
+ *
+ * ## Every retirement is an event now, and `--note` says why
+ *
+ * The command retires one row at a time through {@see TranslationsTable::retirePhraseById()}
+ * rather than in one bulk UPDATE, so each phrase gets a `retire` row in
+ * `trans_translations_history` and a phrase that vanishes from the listing can be accounted
+ * for. `--note` attaches the reasoning to every one of them; it is optional here and
+ * mandatory on the v3 API's retire endpoint, the difference being that a person at a console
+ * can be asked afterwards and an agent cannot.
+ *
+ * ## Not to be confused with retracting a translation
+ *
+ * A retirement is about the **phrase** and destroys nothing: translations stay, catalogs
+ * stay, the site renders what it rendered. A retraction — `null` through the model, the v3
+ * API's `_retract` — deletes one language's **text** and leaves the phrase on the worklist
+ * as a gap. Retracting every language to clear a row does the opposite of what this command
+ * does, and loses five translations doing it.
  */
 final class RetirePhrasesCommand extends Command
 {
@@ -88,6 +105,13 @@ final class RetirePhrasesCommand extends Command
                 . 'searches retired phrases rather than live ones.'
             )
             ->addOption(
+                'note',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Why, recorded against every phrase in the selection. Read by whoever finds one of them '
+                . 'back on the worklist, so write it for them.'
+            )
+            ->addOption(
                 'dry-run',
                 null,
                 InputOption::VALUE_NONE,
@@ -127,7 +151,23 @@ final class RetirePhrasesCommand extends Command
             return self::SUCCESS;
         }
 
-        $affected = $undo ? $this->table->unretire($selection) : $this->table->retire($selection);
+        //One row at a time, through the per-id methods, so that every phrase gets a history
+        //entry saying it was retired and — when the caller bothered — why. The bulk
+        //`retire()` is one UPDATE and writes nothing, which is how thousands of rows left
+        //the worklist in 2026 with no record of who decided that or on what grounds. Three
+        //queries per row on the selections this command is used for (309 was the largest
+        //run) does not buy keeping that.
+        $note     = $input->getOption('note');
+        $note     = null === $note ? null : (string) $note;
+        $affected = 0;
+        foreach ($selection as $id) {
+            $changed = $undo
+                ? $this->table->unretirePhraseById($id, $note)
+                : $this->table->retirePhraseById($id, $note);
+            if ($changed) {
+                $affected++;
+            }
+        }
 
         $io->success(sprintf('%d phrase(s) %s.', $affected, $undo ? 'un-retired' : 'retired'));
         if (! $undo) {
