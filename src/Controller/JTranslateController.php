@@ -55,6 +55,10 @@ class JTranslateController extends AbstractActionController
             'translations'  => $translations,
             'locales'       => $finalLocales,
             'showAll'       => $showAll,
+            //One query for the whole listing, not one per row — see
+            //TranslationsTable::getHistoryCounts(). Phrases with no history are absent
+            //from the map rather than zero, so the view's test is an isset().
+            'historyCounts' => $table->getHistoryCounts(),
         ]);
     }
 
@@ -77,6 +81,11 @@ class JTranslateController extends AbstractActionController
             return $this->redirect()->toRoute('jtranslate');
         }
         $locales = $table->getLocales(true);
+        //A translator deciding whether to replace a translation needs to see what
+        //replacing it last time cost, and why. Read here rather than at each return
+        //because every one of them re-renders the same form. A successful save
+        //redirects to the listing, so there is no path where this is shown stale.
+        $history = $table->getTranslationHistory($id);
         $form = $this->editPhraseForm;
         $request = $this->getRequest();
         if ($request->isPost()) {
@@ -91,6 +100,7 @@ class JTranslateController extends AbstractActionController
                     'phraseId' => $id,
                     'locales' => $locales,
                     'form' => $form,
+                    'history' => $history,
                 ];
             }
             if ($form->isValid()) {
@@ -109,6 +119,7 @@ class JTranslateController extends AbstractActionController
                         'phraseId' => $id,
                         'form' => $form,
                         'locales' => $locales,
+                        'history' => $history,
                     ]);
                 }
 
@@ -154,7 +165,8 @@ class JTranslateController extends AbstractActionController
             'phrase' => $phrase,
             'phraseId' => $id,
             'form' => $form,
-            'locales' => $locales
+            'locales' => $locales,
+            'history' => $history,
         ]);
     }
 
