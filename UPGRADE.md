@@ -42,6 +42,9 @@ every language the translator did not fill in. If `''` meant "clear", saving one
 would wipe the others.
 
 **If you add a `ToNull` filter to a translation input, you will delete translations.**
+
+And if what you actually want is for a phrase to stop appearing on the worklist, this is
+the wrong tool — see §4 on retirement.
 `EditPhraseForm` deliberately has only `StringTrim`, which is what keeps `''` and `null`
 apart. A host application with its own form must do the same.
 
@@ -201,6 +204,21 @@ renders it again and the translation is missing, the idempotent insert clears
 New: `TranslationsTable::retire()`, `unretire()`, and a `jtranslate:retire` console
 command. New criteria for `countPhrases()`/`getPhrasePage()`: `includeRetired`,
 `onlyRetired`, `originRouteLike`.
+
+**Retirement is not retraction, and the two are easy to reach for by mistake.** A
+retraction (`null` through `updatePhrase()`, §2 above) deletes one language's *text* and
+leaves the phrase on the worklist with one more gap. A retirement is about the *phrase*
+and destroys nothing. Retracting every language to make a row go away therefore does the
+opposite of retiring it, and loses every translation on the way.
+
+Also new, for a caller that wants the judgement recorded rather than just done:
+`retirePhraseById()` and `unretirePhraseById()` take a reason and write one
+`trans_translations_history` row per **state change** — `operation` `retire` or
+`unretire`, `locale` `''`, `old_translation` `''`, because nothing was destroyed. Calling
+either on a phrase already in that state is a no-op that writes nothing, so a retry cannot
+file a second judgement. `jtranslate:retire` routes through them and gained `--note`; a
+consuming application can expose them (schoenstatt.link does, as
+`POST /api/v3/phrases/{id}/retire`, with the note mandatory there).
 
 Two limits, both real and both easy to expect too much of:
 
