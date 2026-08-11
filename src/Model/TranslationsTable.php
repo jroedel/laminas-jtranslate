@@ -881,6 +881,13 @@ HAVING PhraseLocaleCount < ?";
     public function getTranslationHistory($phraseId, $locale = null)
     {
         $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
+        //No table, no thread — and no fatal on the edit screen or on /api/v3. See
+        //getHistoryCounts(). An empty thread and an absent table are indistinguishable
+        //to a caller on purpose: both mean "nothing to show", and only a deploy in
+        //progress can produce the second.
+        if (! $this->hasHistoryTable()) {
+            return [];
+        }
 
         //Resolved to the phrase's hash, which is the thread key — see
         //M006CreateTranslationHistory on why the id is not. This lookup is also the
@@ -980,6 +987,13 @@ HAVING PhraseLocaleCount < ?";
     public function getHistoryCounts()
     {
         $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
+        //An installation that has not run M006 has no such table, and the listing must
+        //still render — the marker is an aid, and a deploy that reached the code before
+        //the schema would otherwise 500 the whole translation admin area. Same guard as
+        //every write to this table.
+        if (! $this->hasHistoryTable()) {
+            return [];
+        }
         $sql     = sprintf(
             'SELECT p.`translation_phrase_id` AS `phrase_id`, COUNT(*) AS `entries` '
             . 'FROM `%s` p '
