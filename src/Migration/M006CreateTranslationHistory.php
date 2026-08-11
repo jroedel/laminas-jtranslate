@@ -89,6 +89,26 @@ use function sprintf;
  * answers "which row was this, at the time" for anyone reconstructing events, and it
  * costs one integer.
  *
+ * ### Which means a phrase-level event can appear more than once in a thread
+ *
+ * Worth stating outright, because it reads as a bug the first time. The same string in two
+ * text domains is **two live rows sharing one hash** — routine, and what an application
+ * that renders a label through two domains produces every time. Each row is its own place
+ * on the translator's worklist, so each is retired separately and writes its own `retire`
+ * row here; and since the thread is keyed on the hash, a read from *either* id returns
+ * *both*.
+ *
+ * Two retirements with two notes is therefore the correct answer for a string that existed
+ * twice, and it is not a retry recorded twice: {@see TranslationsTable::retirePhraseById()}
+ * acts only on a row in the opposite state, so a repeat writes nothing at all. `text_domain`
+ * and `translation_phrase_id` on the row are what tell a reader which one each event was
+ * about — which is the second reason both columns are here and the first reason they are not
+ * in the key.
+ *
+ * The operational corollary is the part that costs something if it is missed: **retiring one
+ * row does not retire its sibling.** A caller clearing a string has to retire every row of
+ * it, or the string keeps asking for work through the domain it did not touch.
+ *
  * One consequence to record: an identity change like M005's rewrites `phrase_hash` in
  * `trans_phrases`, and any future one must rewrite it here too or every thread older than
  * the migration disappears. M005 predates this table and had nothing to do.
