@@ -2,6 +2,7 @@
 
 namespace JTranslate\Form;
 
+use Laminas\Db\Adapter\Adapter;
 use Laminas\Form\Form;
 use Laminas\InputFilter\InputFilterProviderInterface;
 use Laminas\Validator\Db\RecordExists;
@@ -38,8 +39,21 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
      * @var array
      */
     protected $inputFilterSpecification;
-    public function __construct($locales, $phrasesTableName, $translationsTableName)
-    {
+    /**
+     * @param Adapter $adapter the adapter the `RecordExists` validator on `phraseId`
+     *                needs. Required, and passed in rather than read from
+     *                `Laminas\Db\TableGateway\Feature\GlobalAdapterFeature`'s static
+     *                registry, which only `JUser\Module::onBootstrap()` ever
+     *                populated — so this form threw for every input, benign
+     *                included, in any process that had not booted laminas-mvc.
+     *                `PhraseValidator` existed partly to hide that.
+     */
+    public function __construct(
+        $locales,
+        $phrasesTableName,
+        $translationsTableName,
+        private readonly Adapter $adapter
+    ) {
         // we want to ignore the name passed
         parent::__construct('edit_phrase');
         $this->locales = $locales;
@@ -151,7 +165,7 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
                         'options' => [
                             'table' => $this->phrasesTableName,
                             'field' => 'translation_phrase_id',
-                            'adapter' => \Laminas\Db\TableGateway\Feature\GlobalAdapterFeature::getStaticAdapter(),
+                            'adapter' => $this->adapter,
                             'messages' => [
                                 RecordExists::ERROR_NO_RECORD_FOUND => 'Phrase not found in database'
                             ],
@@ -219,19 +233,4 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
 
         return $this->inputFilterSpecification = $specification;
     }
-
-//     protected function getLocaleValidatorConfiguration()
-//     {
-//        return array(
-//             'name'    => 'Laminas\Validator\Db\RecordExists',
-//             'options' => array(
-//                 'table' => $this->phrasesTranslationName,
-//                 'field' => 'phrase',
-//                 'adapter' => \Laminas\Db\TableGateway\Feature\GlobalAdapterFeature::getStaticAdapter(),
-//                 'messages' => array(
-//                     \Laminas\Validator\Db\RecordExists::ERROR_NO_RECORD_FOUND => 'Phrase not found in database'
-//                 ),
-//             ),
-//         );
-//  }
 }

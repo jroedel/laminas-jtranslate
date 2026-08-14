@@ -2,6 +2,7 @@
 
 namespace JTranslate\Service;
 
+use Laminas\Db\Adapter\Adapter;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 use JTranslate\Model\TranslationsTable;
@@ -29,7 +30,8 @@ class EditPhraseFormFactory implements FactoryInterface
         $form = new EditPhraseForm(
             $locales,
             $config['phrases_table_name'],
-            $config['translations_table_name']
+            $config['translations_table_name'],
+            $container->get(Adapter::class)
         );
         return $form;
     }
