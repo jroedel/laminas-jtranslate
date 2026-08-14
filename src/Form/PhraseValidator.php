@@ -6,7 +6,6 @@ namespace JTranslate\Form;
 
 use JTranslate\I18n\LanguageMap;
 use Laminas\Db\Adapter\Adapter;
-use Laminas\Db\TableGateway\Feature\GlobalAdapterFeature;
 use Laminas\InputFilter\InputFilterInterface;
 
 /**
@@ -23,11 +22,12 @@ use Laminas\InputFilter\InputFilterInterface;
  * 1. `EditPhraseForm`'s constructor signature, including that its `$locales` argument
  *    is a `[code => display name]` map whose values are never read for validation;
  * 2. that the `security` CSRF input has to be removed, and that its name is `security`;
- * 3. that `getInputFilterSpecification()` calls
- *    `GlobalAdapterFeature::getStaticAdapter()` while building the `RecordExists`
- *    validator on `phraseId`, so the static registry must be populated first — which
- *    `JUser\Module::onBootstrap()` does under laminas-mvc and nothing does anywhere
- *    else.
+ * 3. that the `RecordExists` validator on `phraseId` needs a db adapter — which, until
+ *    2026-08-14, meant knowing that `getInputFilterSpecification()` read
+ *    `GlobalAdapterFeature::getStaticAdapter()` and that the static registry was
+ *    populated by `JUser\Module::onBootstrap()` under laminas-mvc and by nothing
+ *    anywhere else. The form takes the adapter as a constructor argument now, so this
+ *    one is an ordinary dependency rather than a trap.
  *
  * schoenstatt.link's `/api/v3/phrases` reproduced all three, and that is the wrong
  * place for them: every one is an internal detail of this module, and the admin GUI —
@@ -46,15 +46,15 @@ use Laminas\InputFilter\InputFilterInterface;
  * association side of that application. It validates, but it does not implement
  * `Laminas\Validator\ValidatorInterface` and is not usable in a validator chain.
  *
- * ## The static adapter, honestly
+ * ## The static adapter, retired
  *
- * Populating `GlobalAdapterFeature` is a process-global write, and it is done here
- * rather than left to callers precisely because it is easy to forget and produces a
- * `RuntimeException` from deep inside laminas-db when it is. It is safe in the
- * direction that matters: the value written is the adapter this module was configured
- * with, so an application that later populates the registry itself writes the same
- * object. It is still the reason this is one named place instead of a line copied
- * wherever a filter is needed.
+ * This class used to publish its injected adapter into `GlobalAdapterFeature`'s static
+ * registry before building the form, because the form read it from there. The section
+ * that stood here said plainly that a process-global write was the wrong answer and
+ * that this was one named place rather than a fix. It is gone as of 2026-08-14:
+ * `EditPhraseForm` takes an `Adapter`, so the adapter travels down the constructor and
+ * no code in either module touches the registry. Nothing about this class's promise
+ * changed — only that it no longer has to keep a global honest to deliver it.
  */
 final class PhraseValidator
 {
@@ -130,12 +130,11 @@ final class PhraseValidator
      */
     public function inputFilter(): InputFilterInterface
     {
-        GlobalAdapterFeature::setStaticAdapter($this->adapter);
-
         $form = new EditPhraseForm(
             $this->localeMap(),
             $this->phrasesTableName,
-            $this->translationsTableName
+            $this->translationsTableName,
+            $this->adapter
         );
 
         $filter = $form->getInputFilter();
