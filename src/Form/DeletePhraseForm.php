@@ -29,11 +29,27 @@ class DeletePhraseForm extends Form implements InputFilterProviderInterface
                 'class' => 'btn-danger'
             ],
         ]);
+        //`Button`, for the reason SionModel\Form\DeleteEntityForm records at length: a
+        //`name` with no `type` is a plain Laminas\Form\Element, and FormButton renders an
+        //element with no `type` attribute as `type="submit"`. So Cancel submitted the
+        //delete form, and JTranslateController::deleteAction() validates the CSRF token
+        //without looking at which button was pressed — clicking Cancel deleted the phrase.
+        //
+        //Worse here than there, because a phrase is not one record: deletePhrase() destroys
+        //every translation of it in every language, and the export that follows rewrites the
+        //catalogs, so the site stops serving those strings. See docs/translation.md on why a
+        //phrase is retired rather than deleted in the first place.
+        //
+        //Laminas\Form\Element\Button carries `type => button` in its own $attributes, so
+        //naming the type is the whole fix on the browser's side; deleteAction() carries the
+        //server-side half for a hand-crafted POST.
         $this->add([
             'name' => 'cancel',
-//          'type' => 'Submit',
+            'type' => 'Button',
             'attributes' => [
                 'value' => 'Cancel',
+                //The duplicated `id="submit"` is left as it was: invalid HTML, not what
+                //deleted anything, and not for a data-loss fix to change.
                 'id' => 'submit',
                 'data-dismiss' => 'modal'
             ],
