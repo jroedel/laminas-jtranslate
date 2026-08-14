@@ -198,6 +198,14 @@ class JTranslateController extends AbstractActionController
         $form = new DeletePhraseForm();
         if ($request->isPost()) {
             $data = $request->getPost();
+            //A submission naming the cancel button destroys nothing, checked before the
+            //CSRF validation because a cancellation is a no-op and a stale token on one
+            //should not raise a form error about a thing the visitor asked not to do.
+            //DeletePhraseForm no longer renders Cancel as a submit button; this is the
+            //server-side half, for a hand-crafted POST or a page cached from before it.
+            if (null !== $data->get('cancel')) {
+                return $this->redirect()->toRoute('jtranslate');
+            }
             $form->setData($data);
             if ($form->isValid()) {
                 $table->deletePhrase($id);
