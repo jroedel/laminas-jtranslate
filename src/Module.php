@@ -94,7 +94,7 @@ class Module implements BootstrapListenerInterface
         //own permanent phrase — unbounded, untranslatable, and in the email case a
         //record of what a real person typed into a registration form. The renderers
         //that used to do that translation are switched off in step with this: the
-        //formElementErrors line above, and App\Form\BootstrapFormRenderer on the
+        //formElementErrors line above, and SionModel\Form\BootstrapFormRenderer on the
         //Symfony side. Enabling one without the other translates twice.
         //
         //'default' is laminas' own default text domain and the right home: these
