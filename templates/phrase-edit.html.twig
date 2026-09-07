@@ -1,0 +1,95 @@
+{#
+  view/j-translate/j-translate/edit.phtml — one phrase in every language, and what
+  writing to it has replaced before.
+
+  ## The form is rendered field by field, and the order is the data's
+
+  `form_row(form.get('phrase'))` first, then one row plus one hidden id per locale, then
+  the CSRF element and the submit. The per-locale pair is the part that cannot become a
+  generic loop over the form's elements: each language's `<locale>Id` is the
+  `trans_translations` row id being updated, and it travels as a hidden field beside the
+  textarea it belongs to. Rendering the elements in declaration order would separate them.
+
+  `phraseId` is hidden and is checked against the URL by the controller — it is what stops
+  an edit of one phrase writing to another.
+
+  ## The history panel
+
+  Under the form and not beside it, because it is what you read *before* deciding, and the
+  decision is the form above. Absent entirely when nothing has ever been overwritten, which
+  is the common case — a phrase whose languages were only ever filled in has no thread, and
+  an empty panel saying so on every screen would be noise.
+
+  `previous` is a real recovery path: `trans_translations` keeps no copy, so before that
+  table existed the replaced text was simply gone. Copying one back into the field above and
+  saving is how a bad edit gets undone.
+
+  Three shapes of row, and telling them apart is the whole point of the panel:
+
+  - a **retirement** or **unretirement** is an event about the phrase, not a lost
+    translation. It has no language and no previous text, and rendering it in the same shape
+    as the rest would show two empty cells and imply something was destroyed. It answers
+    "why did this leave the worklist", which is the question a reader most often arrives
+    with. `unretire` is the same event in the other direction, and worth showing because a
+    phrase that came back *because a page rendered it* writes no history at all — so a
+    thread ending in a retirement means the site disagreed with whoever retired it.
+  - a **retraction** loses the same text as an overwrite but leaves the language empty
+    rather than replaced, so only one of the two is a translation somebody can look at on
+    the site right now. Hence the `withdrawn` label.
+  - anything else is an overwrite.
+
+  The operation strings come from the model rather than being spelled here, so a rename in
+  `TranslationsTable` cannot leave this template quietly matching nothing.
+#}
+{% extends jtranslate_layout %}
+
+{% block content %}
+<h1>{{ translate(page_title) }}</h1>
+{{ form_open(form, form_action) }}
+{{ form_hidden(form.get('phraseId')) }}
+{{ form_row(form.get('phrase')) }}
+{% for locale, locale_name in locales %}
+{{ form_row(form.get(locale)) }}
+{{ form_hidden(form.get(locale ~ 'Id')) }}
+{% endfor %}
+{{ form_row(form.get('security')) }}
+{{ form_row(form.get('submit')) }}
+{{ form_close() }}
+{% if history is not empty %}
+<hr>
+<h2>{{ translate('Previous versions') }}</h2>
+<p class="help-block">{{ translate('What writing to this phrase has replaced, newest first. Nothing here is rendered by the site any more — it is kept so a change can be reversed, and so the reason for a change survives the person who made it.') }}</p>
+<table class="table responsive-table">
+<thead><tr>
+    <th>{{ translate('Language') }}</th>
+    <th>{{ translate('Previous text') }}</th>
+    <th>{{ translate('Note') }}</th>
+    <th>{{ translate('Replaced') }}</th>
+</tr></thead>
+<tbody>
+{% for entry in history %}
+{% set operation = entry.operation|default(null) %}
+{% set went_back = operation == retire_undone %}
+{% if operation == retired or went_back %}
+<tr class="text-muted">
+    <td colspan="2"><span class="glyphicon glyphicon-{{ went_back ? 'share-alt' : 'inbox' }}"></span>&nbsp;{{ went_back ? translate('Put back on the worklist') : translate('Taken off the worklist') }}</td>
+    <td>{% if entry.notes|default(null) is null or entry.notes == '' %}<span class="text-muted">&mdash;</span>{% else %}{{ entry.notes }}{% endif %}</td>
+    <td>{% if entry.replaced_on|default(null) %}{{ entry.replaced_on }}{% endif %}{% if entry.replacedBy|default(null) is not null %}<br><small class="text-muted">{{ entry.replacedBy }}</small>{% endif %}</td>
+</tr>
+{% else %}
+<tr>
+    <td>{{ entry.locale|default('') }}{% if operation == retracted %}<br><span class="label label-warning">{{ translate('withdrawn') }}</span>{% endif %}</td>
+    <td>{{ entry.old_translation|default('') }}</td>
+    <td>{% if entry.notes|default(null) is null or entry.notes == '' %}<span class="text-muted">&mdash;</span>{% else %}{{ entry.notes }}{% endif %}</td>
+    <td>{% if entry.replaced_on|default(null) %}{{ entry.replaced_on }}{% endif %}{% if entry.replacedBy|default(null) is not null %}<br><small class="text-muted">{{ entry.replacedBy }}</small>{% endif %}
+    {#- The text domain is only worth naming when it is not this phrase's own: the thread is
+        keyed on the phrase rather than the row, so it can carry entries written while the
+        same string lived in another domain. -#}
+    {%- if entry.text_domain|default(null) is not null and entry.text_domain != phrase.textDomain %}<br><small class="text-muted">{{ entry.text_domain }}</small>{% endif %}</td>
+</tr>
+{% endif %}
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+{% endblock %}

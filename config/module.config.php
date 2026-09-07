@@ -137,12 +137,14 @@ return [
             'nowMessenger' => Controller\Plugin\NowMessenger::class,
         ],
     ],
-    'view_manager' => [
-        'template_map' => include __DIR__ . '/template_map.config.php',
-        'template_path_stack' => [
-            'jtranslate' => __DIR__ . '/../view',
-        ],
-    ],
+    /**
+     * **No `view_manager` key any more.** It registered `../view` as a template path and
+     * a `template_map` glob over the same directory; both went with the three `.phtml`
+     * on 2026-09-08, when the GUI moved to Twig templates this module serves itself
+     * (`templates/`, addressed as `@jtranslate/…` — see JTranslate\Twig\JTranslateExtension).
+     * The directory no longer exists, and a template path pointing at a missing directory
+     * is not an error laminas reports.
+     */
 
     'view_helpers' => [
         'factories' => [
