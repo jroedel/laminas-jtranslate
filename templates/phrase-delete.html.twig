@@ -1,0 +1,39 @@
+{#
+  view/j-translate/j-translate/delete.phtml — the confirmation.
+
+  ## The heading is a translated interpolation, and it stays one
+
+  `'Delete ' ~ entity` reaches the translator as the finished string `Delete
+  translation-phrase`, which is what the .phtml does and what the phrase table already
+  holds. It is the wrong shape — the entity name should be a parameter rather than part of
+  the key, which is what `JTranslate\I18n\TranslatableMessage` exists for — but changing it
+  here would retire a phrase and file a new one on both the heading and the `<title>`. Filed
+  in the host's backlog with the other phrase-shape items instead.
+
+  ## The phrase text is escaped here and was not in the .phtml
+
+  The warning names the phrase so a translator can see *which* one they are about to
+  destroy, and the .phtml interpolated it with `sprintf` into HTML with no escaping. Phrase
+  text is written by developers rather than by visitors, so nothing was ever exploited —
+  but a phrase containing `<` rendered as broken markup, and "the data is trusted" is not a
+  property a template should depend on. Twig escapes it.
+
+  Cancel is a `Button` and not a submit: `DeletePhraseForm` declares it as one, because an
+  element with no `type` renders as `type="submit"` and clicking Cancel used to delete the
+  phrase. The controller also refuses a POST naming it, before the CSRF check, for a
+  hand-crafted request or a page cached from before that fix.
+#}
+{% extends jtranslate_layout %}
+
+{% block content %}
+<h1>{{ translate(page_title) }}</h1>
+<p>{{ translate('Are you sure you want to delete the phrase "%s" from the translation database? Only delete if you\'re sure this translation is no longer used, otherwise it will reappear the next time the website encounters the same string.')|format(phrase.phrase) }}</p>
+{{ form_open(form, form_action) }}
+{{ form_row(form.get('security')) }}
+{#- The `&nbsp;` is the .phtml's own separator between the two buttons, and it has to sit
+    hard against both of them: it decodes to U+00A0, which is not whitespace to a browser
+    or to the port harness's normalizer, so a newline either side of it renders as three
+    spaces where laminas renders one. -#}
+{{ form_submit(form.get('submit')) }}&nbsp;{{ form_button(form.get('cancel')) }}
+{{ form_close() }}
+{% endblock %}

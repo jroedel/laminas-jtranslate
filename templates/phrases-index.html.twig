@@ -1,0 +1,84 @@
+{#
+  view/j-translate/j-translate/index.phtml — the translation worklist.
+
+  **No `<h1>`**, as the .phtml has none: the page announces itself through the layout's
+  `<title>` only. Reproduced rather than improved, so that the port owns no visible change;
+  the missing heading is filed in the host's backlog instead.
+
+  The two links in the paragraph are the filter, and they are asymmetric on purpose: "show
+  all" is a bare `?showAll=true` — relative, so it keeps whatever locale prefix and path the
+  visitor is on — while "show pending" is a full path from the route, because dropping a
+  query parameter cannot be done with a relative link.
+
+  ## Two tooltips, hand-written rather than through the host's `tooltip()`
+
+  The host has a `tooltip()` function and it emits different markup: `class="tooltip"` with
+  a `title` attribute, where these spans carry `data-container="body"` and
+  `data-original-title`. Using it would change the bytes of every populated cell on a page
+  whose port is verified by a byte-for-byte diff — so the markup stays as the .phtml wrote
+  it. Whether the site should have one tooltip mechanism is a real question, and not one a
+  port gets to answer.
+
+  ## Why the phrase text is truncated and the tooltip is not
+
+  A phrase can be the length of a paragraph (`trans_phrases.phrase` is a `mediumtext`), and
+  this table renders every phrase of the project. `truncate(…, 100)` is what keeps a row a
+  row. The full text is one click away, on the edit screen.
+#}
+{% extends jtranslate_layout %}
+
+{% block content %}
+<p>{% if show_all %}<a href="{{ jtranslate_path('jtranslate') }}" class="btn btn-primary">{{ translate('Show pending translations') }}</a>{% else %}<a href="?showAll=true" class="btn btn-primary">{{ translate('Show all translations') }}</a>{% endif %}</p>
+<table class="table responsive-table">
+<thead><tr>
+    <th>{{ translate('Text Domain') }}</th>
+    <th>{{ translate('Key (English)') }}</th>
+{% for locale_name in locales %}
+    <th>{{ translate(locale_name) }}</th>
+{% endfor %}
+</tr></thead>
+<tbody>
+{% for row in translations %}
+<tr>
+    {#- The text domain names where a string lives; the tooltip names the route that
+        discovered it, which is how a phrase with a surprising domain gets explained. A row
+        with no origin route is the plain text, not an empty tooltip. -#}
+    <td>{% if row.originRoute is null or row.originRoute|length < 1 %}{{ row.textDomain }}{% else %}
+        {%- set origin = translate("Originated from the '%s' route")|format(row.originRoute|e('html_attr')) -%}
+        <span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="{{ origin|raw }}">{{ row.textDomain }}</span>
+    {%- endif %}</td>
+    <td><a href="{{ jtranslate_path('jtranslate/phrase/edit', {'phrase_id': row.phraseId}) }}"><span class="glyphicon glyphicon-pencil"></span></a><a href="{{ jtranslate_path('jtranslate/phrase/delete', {'phrase_id': row.phraseId}) }}"><span class="glyphicon glyphicon-remove"></span></a>
+    {#- Marks a phrase whose translations have been replaced at least once, so a translator
+        can see before opening it that somebody has already argued about this one. Costs no
+        query of its own — history_counts is the whole listing's answer, fetched once. -#}
+    {%- set entries = history_counts[row.phraseId]|default(0) -%}
+    {%- if entries > 0 -%}
+        {%- set replaced = translate('%s previous version(s) — a translation here has been replaced before')|format(entries) -%}
+<a href="{{ jtranslate_path('jtranslate/phrase/edit', {'phrase_id': row.phraseId}) }}"
+   data-toggle="tooltip" data-placement="bottom" data-container="body"
+   data-original-title="{{ replaced|e('html_attr') }}"><span
+   class="glyphicon glyphicon-time"></span></a>
+    {#- The newline before `endif` is *not* trimmed, and that is the whole reason this
+        block is shaped like this: the .phtml has one between the clock's `</a>` and its
+        `&nbsp;`, so a row carrying the marker renders a space there and a row without one
+        does not. Trimming it makes the two kinds of row identical — which is tidier, and
+        differs from laminas on exactly the six rows that have any history. #}
+    {% endif %}&nbsp;{{ truncate(row.phrase, 100) }}</td>
+{% for locale, locale_name in locales %}
+    <td>{% if row[locale] is defined %}
+        {%- set author = row[locale ~ 'ModifiedBy']|default(null) -%}
+        {%- set changed = row[locale ~ 'ModifiedOn']|default(null) -%}
+        {%- if author and changed -%}
+            {%- set who = author.username|default('?') -%}
+            {%- set submitted = translate('submitted on %s by %s')|format(short_date(changed), who|e('html_attr')) -%}
+            <span data-toggle="tooltip" data-placement="bottom" data-container="body" data-original-title="{{ submitted|raw }}">{{ truncate(row[locale], 100) }}</span>
+        {%- else -%}
+            {{- truncate(row[locale], 100) -}}
+        {%- endif -%}
+    {%- endif %}</td>
+{% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

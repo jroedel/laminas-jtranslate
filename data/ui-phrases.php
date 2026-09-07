@@ -13,7 +13,7 @@
  * ## Provenance, and the rule this file follows
  *
  * **Every phrase below is a string literal in this repository's own `src/` or
- * `view/`, and every translation below was already committed to this repository.**
+ * `templates/`, and every translation below was already committed to this repository.**
  * Nothing here came from any application's database. That rule is not bureaucratic:
  * `trans_phrases` is shared between the applications that use this library, so a
  * phrase in it belongs to whichever project contributed it and may be anything at
@@ -46,7 +46,7 @@
  */
 
 return [
-    //view/j-translate/j-translate/index.phtml
+    //templates/phrases-index.html.twig
     'Manage Translations'                                    => [],
     'Show pending translations'                               => [],
     'Show all translations'                                   => [],
@@ -54,18 +54,33 @@ return [
     'Key (English)'                                           => [],
     "Originated from the '%s' route"                           => [],
     'submitted on %s by %s'                                   => [],
+    '%s previous version(s) — a translation here has been replaced before' => [],
 
-    //view/j-translate/j-translate/edit.phtml
+    //templates/phrase-edit.html.twig
     'Edit Translation'                                        => [],
+    //The history panel. Absent from this file until 2026-09-08 — the panel was added to
+    //the .phtml in 2026-08 and the phrases were never seeded, so a fresh installation
+    //discovered them one page view at a time instead.
+    'Previous versions'                                       => [],
+    'What writing to this phrase has replaced, newest first. Nothing here is rendered by'
+    . ' the site any more — it is kept so a change can be reversed, and so the reason for'
+    . ' a change survives the person who made it.'                                   => [],
+    'Language'                                                => [],
+    'Previous text'                                           => [],
+    'Note'                                                    => [],
+    'Replaced'                                                => [],
+    'Put back on the worklist'                                => [],
+    'Taken off the worklist'                                  => [],
+    'withdrawn'                                               => [],
 
-    //view/j-translate/j-translate/delete.phtml. The heading is built as
+    //templates/phrase-delete.html.twig. The heading is built as
     //'Delete ' . $entity, and the controller's only entity is 'translation-phrase'.
     'Delete translation-phrase'                               => [],
     'Are you sure you want to delete the phrase "%s" from the translation database?'
     . ' Only delete if you\'re sure this translation is no longer used, otherwise it'
     . ' will reappear the next time the website encounters the same string.'         => [],
 
-    //src/Controller/JTranslateController.php
+    //src/Controller/Phrase{Index,Edit,Delete}Controller.php and src/Page/PhraseAdmin.php
     'Phrase not found.'                                       => [],
     'Error in form submission, please review.'                 => [],
     'Translations successfully updated.'                       => [],
