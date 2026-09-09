@@ -410,6 +410,7 @@ If your database user lacks DDL rights — which is the normal arrangement — u
 ### Looking ahead to 3.0
 
 Read the "What is leaving in 3.0" table in [README.md](README.md) before building
-anything new against this version. The short form: `NowMessenger`, the countries
-and flag helpers, the 440-line hardcoded locale-name table, `LazyControllerFactory`,
-and writing catalogs into the source tree are all scheduled for removal.
+anything new against this version. The short form: the countries and flag helpers, the
+440-line hardcoded locale-name table and writing catalogs into the source tree are
+scheduled for removal; `NowMessenger`, the flash view helper and `LazyControllerFactory`
+went in 2026-09 together with the `laminas-mvc` requirement.

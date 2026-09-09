@@ -311,8 +311,8 @@ gateways, a `PhraseCache`, config, an optional
 
 That means you can build one from a Symfony request, a console command, or a
 test, and call `flush($routeName)` yourself at whatever point your framework
-considers the end of a request. `TranslationsTableFactory` is the Laminas adapter
-and is the only file that knows about `MvcEvent`.
+considers the end of a request. `TranslationsTableFactory` is the ServiceManager
+adapter; nothing in the module knows about laminas-mvc any more.
 
 The two collaborator interfaces are resolved reflectively by service id behind a
 `has()` check, and wrapped in callable adapters, so a host that provides neither
@@ -329,7 +329,7 @@ so nobody builds anything new on it.
 
 | what | lines | why it is going |
 | --- | --- | --- |
-| `Controller\Plugin\NowMessenger`, `View\Helper\NowMessenger`, its factory | ~454 | A `FlashMessenger` clone that renders in the *same* request. It has nothing to do with translation; it lives here for historical reasons. Under Twig this is a template variable. It currently has callers in SionModel and two other modules, so it must move or be replaced there first. |
+| ~~`Controller\Plugin\NowMessenger`, `View\Helper\NowMessenger`, `View\Helper\FlashMessenger`~~ | — | **Gone (2026-09).** The host stores messages; `I18n\MessageRenderer` renders them, TranslatableMessage included. |
 | `Model\CountriesInfo`, `data/countries.json`, `View\Helper\CountryName`, `View\Helper\Flag`, their factories | ~380 | Country names and flags. `symfony/intl` and ext-intl cover the names; flags are CSS or emoji. Also has external callers today. |
 
 ### Superseded by the platform
@@ -337,7 +337,7 @@ so nobody builds anything new on it.
 | what | lines | replacement |
 | --- | --- | --- |
 | `TranslationsTable::getLocaleNames()` | **440** | A hardcoded CLDR locale-name table, circa 2012, and 32% of that file. `\Locale::getDisplayName()` does this natively, correctly, and localised into the viewer's language. `View\Helper\LanguageName` already made this switch in 2.0; the table itself is next. |
-| `Controller\LazyControllerFactory` | 75 | `Laminas\ServiceManager\AbstractFactory\ReflectionBasedAbstractFactory`, which did not exist when this was written. |
+| ~~`Controller\LazyControllerFactory`~~ | — | **Gone (2026-09)** with the last laminas controller. |
 | `TranslationsTable::fetchSome()`, `setDbAdapter()`, `AdapterAwareInterface` | — | A homegrown query helper and a laminas-db pattern that predates the current one. |
 | `$arrayFilePatterns` | — | Vestigial. Declared, never read. |
 
@@ -346,8 +346,8 @@ so nobody builds anything new on it.
 | what | why |
 | --- | --- |
 | Catalogs written into the source tree (`module/*/language/`, `language/`) | Still written among sources, though no longer *committed* here, and `jtranslate:export-catalogs` can rebuild them now. What remains for 3.0 is moving the write target out of deployed source entirely, into a cache directory — the real fix for the permissions complaints, since nothing the web server must write should live where a deploy also writes. |
-| The admin GUI (`JTranslateController`, both forms, three `.phtml`) | ~480 lines built on `AbstractActionController`, laminas-form and `FlashMessenger`. It is the last part that requires laminas-mvc, and it is the part most worth rewriting rather than porting. |
-| `Module::onBootstrap()`'s per-controller text-domain listener | Sets the text domain from the controller's root namespace on every dispatch, eagerly instantiating twelve view helpers to do it. Under a framework where the domain is an argument to `trans()`, this disappears. |
+| The admin GUI's forms | laminas-form, rendered through the host's Twig form functions. The controllers and templates are Symfony/Twig since 2.0; laminas-mvc is no longer required at all. |
+| `Module::onBootstrap()` | What is left of it configures the translator (fallback locale, missing-translation listener, catalog patterns) for a laminas ModuleManager host; a Symfony host does the same from a delegator. The per-dispatch text-domain listener is gone (2026-09). |
 | `getTranslations()` loading the full user directory | It fetches every user to populate one attribution column, for every caller including those that never display it. |
 
 ## Upgrading

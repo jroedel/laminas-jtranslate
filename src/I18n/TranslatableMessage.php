@@ -36,8 +36,8 @@ use function vsprintf;
  *
  * ## Where it is understood
  *
- * `JTranslate\View\Helper\NowMessenger` and `JTranslate\View\Helper\FlashMessenger`.
- * Anything else that receives one will stringify it badly, so it is deliberately not
+ * {@see MessageRenderer}, which the host's Twig layer renders flash and now messages
+ * through. Anything else that receives one will stringify it badly, so it is deliberately not
  * `Stringable`: a silent `"Token issued…: %s"` with the data dropped would be worse
  * than a visible error.
  *
