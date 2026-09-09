@@ -125,9 +125,9 @@ return [
     /**
      * **No `view_helpers` key any more.** `flag` and `countryName` were the last two, and
      * both became plain classes on 2026-09 — see JTranslate\View\Escape for what replaced
-     * the renderer they reached through. A host constructs them itself now; the two
-     * factories under src/View/Helper/Service are what a laminas host would still use and
-     * nothing here does.
+     * the renderer they reached through. A host constructs them itself now, and the two
+     * factories under src/View/Helper/Service that a laminas host would have used are
+     * deleted: this library keeps no code for one.
      */
     /**
      * Registered lazily by service id, so declaring them costs nothing until one is
