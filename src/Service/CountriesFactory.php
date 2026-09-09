@@ -4,8 +4,8 @@ namespace JTranslate\Service;
 
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
-use Laminas\Json\Json;
 use JTranslate\Model\CountriesInfo;
+use RuntimeException;
 
 /**
  * Factory responsible of priming the CountriesInfo service
@@ -22,7 +22,18 @@ class CountriesFactory implements FactoryInterface
     public function __invoke(ContainerInterface $container, $requestedName, ?array $options = null)
     {
         //data vendored from mledoze/countries, see module/JTranslate/data/countries.README.txt
-        $countries = Json::decode(file_get_contents(__DIR__ . '/../../data/countries.json'));
+        //
+        //`Laminas\Json\Json::decode()` until laminas-json was removed. Two things about it
+        //had to be kept: it decodes to **stdClass**, not arrays — CountriesInfo reads
+        //`$obj->cca2` and `$scotland->name->common` — and it *threw* on malformed input
+        //rather than returning null, which JSON_THROW_ON_ERROR reproduces. A null here
+        //would surface as an unreadable error deep inside CountriesInfo instead.
+        $file = __DIR__ . '/../../data/countries.json';
+        $json = file_get_contents($file);
+        if (false === $json) {
+            throw new RuntimeException(sprintf('Cannot read the vendored country data at %s', $file));
+        }
+        $countries = json_decode($json, false, 512, JSON_THROW_ON_ERROR);
 
         //The locales come from config rather than being hardcoded in the model. Read
         //through the same resolved `jtranslate` config every other service here uses, so
