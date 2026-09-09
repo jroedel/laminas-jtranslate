@@ -2,8 +2,6 @@
 
 namespace JTranslate;
 
-use Laminas\Router\Http\Segment;
-use Laminas\Router\Http\Literal;
 use Laminas\Db\Adapter\Adapter;
 
 return [
@@ -55,61 +53,6 @@ return [
                 'base_dir' => __DIR__ . '/../language',
                 'pattern'  => '%s.lang.php',
                 'text_domain' => __NAMESPACE__,
-            ],
-        ],
-    ],
-    'router' => [
-        'routes' => [
-            'jtranslate' => [
-                'type'    => Literal::class,
-                'options' => [
-                    'route'    => '/admin/translations',
-                    'defaults' => [
-                        'controller' => Controller\JTranslateController::class,
-                        'action'     => 'index',
-                    ],
-                ],
-                'may_terminate' => true,
-                //There is no 'clear-cache' child route. It used to declare
-                //`'action' => 'clearCache'`, and JTranslateController has never had a
-                //clearCacheAction() — only index, edit and delete — so reaching
-                ///admin/translations/clear-cache was a guaranteed dispatch failure. It
-                //also carried no bjyauthorize guard, which is the only reason it never
-                //surfaced: it was unreachable in practice and a fatal in principle.
-                //Whatever it was meant to do is served by SionModel's
-                ///sm/clear-persistent-cache and by `bin/console cache:flush-persistent`.
-                'child_routes' => [
-                    'phrase' => [
-                        'type'    => Segment::class,
-                        'options' => [
-                            'route'    => '/:phrase_id',
-                            'constraints' => [
-                                'phrase_id' => '[0-9]{1,5}',
-                            ],
-                        ],
-                        'may_terminate' => false,
-                        'child_routes' => [
-                            'edit' => [
-                                'type'    => Literal::class,
-                                'options' => [
-                                    'route'    => '/edit',
-                                    'defaults' => [
-                                        'action'     => 'edit',
-                                    ],
-                                ],
-                            ],
-                            'delete' => [
-                                'type'    => Literal::class,
-                                'options' => [
-                                    'route'    => '/delete',
-                                    'defaults' => [
-                                        'action'     => 'delete',
-                                    ],
-                                ],
-                            ],
-                        ],
-                     ],
-                ],
             ],
         ],
     ],
