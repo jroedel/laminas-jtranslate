@@ -25,11 +25,9 @@
         "laminas/laminas-form": "^3.0",
         "laminas/laminas-translator": "^1.0",
         "laminas/laminas-inputfilter": "^2.15",
-        "laminas/laminas-json": "^3.3",
         "laminas/laminas-modulemanager": "^2.11",
         "laminas/laminas-router": "^3.5",
         "laminas/laminas-servicemanager": "^3.11",
-        "laminas/laminas-view": "^2.20",
         "psr/log": "^3.0",
         "symfony/http-foundation": "^7.0",
         "twig/twig": "^3.0"
