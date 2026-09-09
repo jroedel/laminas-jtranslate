@@ -3,7 +3,6 @@
 namespace JTranslate;
 
 use JTranslate\I18n\Translator\TranslatorEventListener;
-use Laminas\Mvc\Controller\AbstractActionController;
 use JTranslate\Model\TranslationsTable;
 use Laminas\ModuleManager\ModuleManager;
 use Laminas\EventManager\EventInterface;
@@ -19,59 +18,24 @@ class Module implements BootstrapListenerInterface
 
     public function onBootstrap(EventInterface $e)
     {
-        /** @var $app \Laminas\Mvc\ApplicationInterface */
+        //the ModuleManager's bootstrap event targets the application, whatever class
+        //the host gives it; only its service manager is used here
         $app = $e->getTarget();
         $sm = $app->getServiceManager();
-        $em = $app->getEventManager();
 
         $config = $sm->get('JTranslate\Config');
-        //The text domain the navigation helper renders in, and the translator's fallback
-        //locale. Both were hardcoded — 'Application' and 'en_US' — which is wrong for any
-        //installation whose menu strings live elsewhere or whose source language is not
-        //English. They default to what was hardcoded, so nothing changes without being
-        //asked for.
+        //The translator's fallback locale. It was hardcoded to 'en_US', which is wrong for
+        //any installation whose source language is not English; the default is what was
+        //hardcoded, so nothing changes without being asked for.
         //
-        //The navigation domain is *not* the dispatched module's namespace like every
-        //other helper below: the menu is one tree rendered on every page, so its strings
-        //belong to whichever domain owns the menu rather than to whatever controller
-        //happens to be answering.
-        $navigationTextDomain = $config['navigation_text_domain'] ?? 'Application';
-        $fallbackLocale       = $config['key_locale'] ?? 'en_US';
+        //(The per-dispatch listener that set every view helper's text domain from the
+        //controller's namespace lived here until 2026-09. Nothing dispatches a laminas
+        //controller any more; a Twig host passes the domain to translate() itself.)
+        $fallbackLocale = $config['key_locale'] ?? 'en_US';
 
-//auto-set text domain for all view scripts
-        $viewRenderer = $sm->get('ViewRenderer');
-        $em->getSharedManager()
-        ->attach(AbstractActionController::class, 'dispatch', function ($e) use (
-            $viewRenderer,
-            $navigationTextDomain
-        ) {
-
-            $controller = $e->getTarget();
-            $controllerClass = get_class($controller);
-            $moduleNamespace = substr($controllerClass, 0, strpos($controllerClass, '\\'));
-            $viewRenderer->plugin('translate')->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->formLabel()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->formText()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->formElementErrors()->setTranslatorTextDomain($moduleNamespace);
-            //A validation message arrives here already interpolated — laminas
-            //substitutes %value%, %hostname% and friends inside the validator — so
-            //translating it now registers the *user's input* as a phrase. Six
-            //strangers' mistyped email hostnames reached the table that way. The
-            //templates are translated instead, by the default validator translator
-            //set below, which happens before interpolation.
-            $viewRenderer->formElementErrors()->setTranslateMessages(false);
-            $viewRenderer->formInput()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->formButton()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->formSelect()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->formCheckbox()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->formRow()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->headTitle()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->flashMessenger()->setTranslatorTextDomain($moduleNamespace);
-            $viewRenderer->navigation()->setTranslatorTextDomain($navigationTextDomain);
-        }, 100);
 //         try { //fail silently if we can't get a translator, or something else goes wrong, then log it.
-            /** @var \Laminas\Mvc\I18n\Translator $translator */
-            $translator = $sm->get('jtranslate_translator');
+            /** @var \Laminas\I18n\Translator\Translator $translator */
+            $translator = $sm->get(\Laminas\I18n\Translator\TranslatorInterface::class);
         $translator->enableEventManager();
         $translator->setLocale(\Locale::getDefault());
         //The key locale is the language the phrases themselves are written in, so it is

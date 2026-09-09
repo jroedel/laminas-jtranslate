@@ -10,7 +10,6 @@ use JTranslate\Service\Adapter\CallableActingUserProvider;
 use JTranslate\Service\Adapter\CallableUserDirectory;
 use Laminas\Db\Adapter\Adapter;
 use Laminas\Db\TableGateway\TableGateway;
-use Laminas\Mvc\MvcEvent;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
@@ -18,13 +17,14 @@ use function getcwd;
 use function is_string;
 
 /**
- * Builds {@see TranslationsTable} and does the laminas-specific wiring it no longer
- * does for itself.
+ * Builds {@see TranslationsTable} from the container.
  *
  * This factory is the module's framework adapter, and that is deliberate: it is the
- * one place allowed to know about laminas-mvc, the ServiceManager, JUser and
- * SionModel. The model behind it knows about none of them, which is what makes it
- * constructible from a Symfony request, a console command or a test.
+ * one place allowed to know about the ServiceManager, JUser and SionModel. The model
+ * behind it knows about none of them, which is what makes it constructible from a
+ * Symfony request, a console command or a test. The end-of-request `flush()` is the
+ * host's to call — schoenstatt.link arms it from its translator delegator and runs it on
+ * `kernel.terminate`.
  *
  * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
@@ -74,37 +74,8 @@ class TranslationsTableFactory implements FactoryInterface
             $rootDirectory
         );
 
-        $this->wireEndOfRequestFlush($container, $table);
 
         return $table;
-    }
-
-    /**
-     * Call flush() when laminas finishes the request.
-     *
-     * This used to happen inside the model's constructor, which is why the model
-     * needed an event manager and therefore laminas-mvc. Priority -1 is the original's
-     * and matters: it must run after anything that might still translate a phrase, and
-     * before SendResponseListener at -10000.
-     */
-    private function wireEndOfRequestFlush(ContainerInterface $container, TranslationsTable $table): void
-    {
-        if (! $container->has('Application')) {
-            //no MVC application, so no end-of-request event to hang this on. A console
-            //command or a Symfony-served request calls flush() explicitly instead.
-            return;
-        }
-
-        /** @var \Laminas\Mvc\Application $application */
-        $application = $container->get('Application');
-        $application->getEventManager()->attach(
-            MvcEvent::EVENT_FINISH,
-            static function (MvcEvent $event) use ($table): void {
-                $match = $event->getRouteMatch();
-                $table->flush($match ? $match->getMatchedRouteName() : null);
-            },
-            -1
-        );
     }
 
     private function actingUserProvider(ContainerInterface $container): ?ActingUserProviderInterface

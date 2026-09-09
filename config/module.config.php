@@ -5,7 +5,6 @@ namespace JTranslate;
 use Laminas\Router\Http\Segment;
 use Laminas\Router\Http\Literal;
 use Laminas\Db\Adapter\Adapter;
-use Laminas\Mvc\I18n\Translator;
 use Laminas\Serializer\Adapter\Json;
 
 return [
@@ -124,19 +123,6 @@ return [
             ],
         ],
     ],
-    'controllers' => [
-        'invokables' => [
-            //JTranslateController::class => JTranslateController::class,
-        ],
-        'abstract_factories' => [
-            \JTranslate\Controller\LazyControllerFactory::class,
-        ],
-    ],
-    'controller_plugins' => [
-        'invokables' => [
-            'nowMessenger' => Controller\Plugin\NowMessenger::class,
-        ],
-    ],
     /**
      * **No `view_manager` key any more.** It registered `../view` as a template path and
      * a `template_map` glob over the same directory; both went with the three `.phtml`
@@ -150,24 +136,6 @@ return [
         'factories' => [
             'flag'                  => View\Helper\Service\FlagFactory::class,
             'countryName'           => View\Helper\Service\CountryNameFactory::class,
-            'nowMessenger'          => View\Helper\Service\NowMessengerFactory::class,
-            /**
-             * Replaces the laminas flash-messenger view helper with JTranslate's,
-             * which understands a TranslatableMessage — a message whose data is
-             * interpolated after translation rather than before, so the data never
-             * becomes a phrase.
-             *
-             * Keyed by the *parent's* service id rather than by an alias of our own,
-             * so all five of its aliases (`flashmessenger`, `flashMessenger`,
-             * `FlashMessenger`, the legacy Zend class name, and
-             * `laminasviewhelperflashmessenger`) resolve here. This depends on
-             * JTranslate loading after `Laminas\Mvc\Plugin\FlashMessenger` in
-             * config/modules.config.php; it does.
-             */
-            \Laminas\Mvc\Plugin\FlashMessenger\View\Helper\FlashMessenger::class
-                                    => View\Helper\Service\FlashMessengerFactory::class,
-            'laminasviewhelperflashmessenger'
-                                    => View\Helper\Service\FlashMessengerFactory::class,
         ],
         'invokables' => [
             'languageName'          => View\Helper\LanguageName::class,
@@ -209,7 +177,9 @@ return [
         ],
         'aliases' => [
             'jtranslate_db_adapter' => Adapter::class,
-            'jtranslate_translator' => Translator::class,
+            //the host's decorated translator — laminas-mvc-i18n's id, kept by the host's
+            //own factory after that package left
+            'jtranslate_translator' => 'MvcTranslator',
         ],
     ],
 ];

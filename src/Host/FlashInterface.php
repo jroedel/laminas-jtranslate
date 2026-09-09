@@ -24,13 +24,10 @@ use JTranslate\I18n\TranslatableMessage;
  *
  * ## What it replaces
  *
- * `Laminas\Mvc\Plugin\FlashMessenger` and this module's own
- * `JTranslate\Controller\Plugin\NowMessenger`, reached from the GUI controller as
- * controller plugins — which a Symfony-served controller cannot do at all. Note that
- * unlike JUser 3.0.0, abstracting them here does not take a package out of `require`:
- * this module is still a laminas module (the translator listener, the view helpers and
- * `nowMessenger` itself all stay), and the flash messenger's *view* helper is what
- * renders these messages on a bridged page.
+ * `Laminas\Mvc\Plugin\FlashMessenger` and this module's own `NowMessenger` controller
+ * plugin, both deleted with the laminas-mvc layer. The host keeps the messages
+ * (schoenstatt.link: `SionModel\Messaging\FlashMessages` and `NowMessages`) and renders
+ * them through {@see \JTranslate\I18n\MessageRenderer}.
  *
  * ## One implementation instance per request, and the host must ensure it
  *
