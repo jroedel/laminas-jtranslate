@@ -52,7 +52,7 @@ use function sprintf;
  * would compare under `utf8mb4_unicode_520_ci` — case-insensitive, accent-insensitive,
  * PAD SPACE — so seeding `Save` would silently claim an existing row for `save` and
  * attach this migration's translations to it. The hash is over the raw bytes, which is
- * the same identity `Laminas\I18n\Translator` uses on its catalog keys and the same one
+ * the same identity the translator uses on its catalog keys and the same one
  * `phrase_identity` enforces. See M003 for the longer version of this argument.
  */
 final class M002SeedUiPhrases implements MigrationInterface

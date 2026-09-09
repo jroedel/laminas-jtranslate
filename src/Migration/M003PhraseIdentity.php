@@ -58,7 +58,7 @@ use function sprintf;
  * The second failure is collation, and it is the decisive one. `phrase` is
  * `utf8mb4_unicode_520_ci`: case-insensitive, accent-insensitive, PAD SPACE. A
  * `UNIQUE` index under that collation treats `Save`, `save` and `Save ` as one value,
- * while `Laminas\I18n\Translator` compares its catalog keys byte for byte and treats
+ * while the translator compares its catalog keys byte for byte and treats
  * them as three. The constraint would refuse phrases that are genuinely distinct to
  * the only consumer that matters, and it would do it silently — the phrase would
  * simply never become translatable.

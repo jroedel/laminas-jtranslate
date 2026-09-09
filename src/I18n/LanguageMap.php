@@ -19,7 +19,7 @@ use function strtolower;
  * interface should speak.
  *
  * `trans_translations.locale` holds ICU locales — `en_US`, `pt_BR` — because that is
- * what `Laminas\I18n` resolves a catalog by, and that is not going to change. But a
+ * what the translator resolves a catalog by, and that is not going to change. But a
  * *language* is what a caller outside the application usually means, and the region
  * subtag is noise to it: an agent asked to review the German translations should say
  * `de`, not have to learn that this particular installation happens to key German on

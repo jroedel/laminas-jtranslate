@@ -1,12 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JTranslate\I18n\Translator;
 
-use Laminas\EventManager\AbstractListenerAggregate;
-use Laminas\EventManager\Event;
-use Laminas\EventManager\EventManagerInterface;
-use Laminas\I18n\Translator\Translator;
 use JTranslate\Model\TranslationsTable;
+
+use function array_key_exists;
 
 /**
  * Records phrases the translator asked for and could not find.
@@ -30,57 +30,57 @@ use JTranslate\Model\TranslationsTable;
  *
  * It now takes `getLocales(true)`. The cost is nil in steady state: every phrase in the
  * database already has an auto-inserted key-locale translation, so the compiled catalog
- * has it and no event fires. Only a genuinely never-before-seen string reaches here in
- * the key locale, which is exactly the case that was being dropped.
+ * has it and no miss is reported. Only a genuinely never-before-seen string reaches here
+ * in the key locale, which is exactly the case that was being dropped.
  *
- * Both wiring sites must pass the same thing — `JTranslate\Module::onBootstrap()` and,
- * in the Symfony-side host, `App\Laminas\TranslatorConfigurator`. A discrepancy would
- * mean discovery worked under one front controller and not the other.
+ * ## A plain callable, not a listener aggregate
+ *
+ * Until 2026-09 this extended `Laminas\EventManager\AbstractListenerAggregate` and hung
+ * off `Laminas\I18n\Translator\Translator::EVENT_MISSING_TRANSLATION`. Both packages are
+ * gone from the translation path; {@see Translator::onMissingTranslation()} takes this
+ * object directly. The three event parameters became three arguments and nothing else
+ * changed — including the return contract: null means "no replacement, record it", and a
+ * string would be used as the translation.
  */
-class TranslatorEventListener extends AbstractListenerAggregate
+final class TranslatorEventListener
 {
-    /** @var TranslationsTable $table **/
-    protected $table;
-
     /**
-     * The locales a miss is worth recording in, as a map keyed by locale.
-     *
-     * Keyed, not a list — the test below is a `key_exists()`. Build it with
-     * `TranslationsTable::getLocales(true)`; see the class docblock for why the `true`
-     * is load-bearing.
-     *
-     * @var string[]
+     * @param TranslationsTable $table where a miss is recorded
+     * @param array<string, mixed> $locales the locales a miss is worth recording in, as a
+     *        map **keyed by locale** — the test below is an `array_key_exists()`. Build it
+     *        with `TranslationsTable::getLocales(true)`; see the class docblock for why
+     *        the `true` is load-bearing.
      */
-    protected $locales;
-
-    /**
-     * @param TranslationsTable $table
-     * @param string[] $locales keyed by locale, from getLocales(true)
-     */
-    public function __construct($table, $locales)
-    {
-        $this->table    = $table;
-        $this->locales  = $locales;
+    public function __construct(
+        private readonly TranslationsTable $table,
+        private readonly array $locales
+    ) {
     }
 
-    public function attach(EventManagerInterface $events, $priority = 1)
+    /** The shape {@see Translator::onMissingTranslation()} calls. */
+    public function __invoke(string $message, string $locale, string $textDomain): ?string
     {
-        $this->listeners[] = $events->attach(
-            Translator::EVENT_MISSING_TRANSLATION,
-            [$this, 'missingTranslation'],
-            $priority
-        );
+        $this->missingTranslation($message, $locale, $textDomain);
+
+        return null;
     }
 
     /**
-     * @param Event $e
+     * Record one miss, unless it is in a locale this installation does not translate.
+     *
+     * Returns nothing: the phrase is *queued*, and `TranslationsTable::flush()` writes it
+     * at the end of the request. A host that never flushes discovers nothing, which is
+     * why the flush is wired at the same moment the listener is.
      */
-    public function missingTranslation(Event $e)
+    public function missingTranslation(string $message, string $locale, string $textDomain): void
     {
-        $params = $e->getParams();
-        if (! key_exists($params['locale'], $this->locales)) {
+        if (! array_key_exists($locale, $this->locales)) {
             return;
         }
-        $this->table->reportMissingTranslation($params);
+        $this->table->reportMissingTranslation([
+            'message'     => $message,
+            'locale'      => $locale,
+            'text_domain' => $textDomain,
+        ]);
     }
 }
