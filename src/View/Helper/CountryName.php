@@ -1,20 +1,29 @@
 <?php
 
-// JTranslate/View/Helper/Flag.php
+// JTranslate/View/Helper/CountryName.php
 
 namespace JTranslate\View\Helper;
 
-use Laminas\View\Helper\AbstractHelper;
 use JTranslate\Model\CountriesInfo;
+use JTranslate\View\Escape;
 
-class CountryName extends AbstractHelper
+/**
+ * A country code as its name in the current locale, optionally preceded by a flag icon.
+ *
+ * A plain class since 2026-09: like {@see Flag}, the only thing it took from
+ * `Laminas\View\Helper\AbstractHelper` was `$this->view->escapeHtmlAttr()`, which is now
+ * {@see Escape::htmlAttr()}.
+ */
+class CountryName
 {
     public const COUNTRY_NAME_COMMON = 'common';
     public const COUNTRY_NAME_OFFICIAL = 'official';
-/** @var CountriesInfo $countriesInfo */
+
+    /** @var CountriesInfo $countriesInfo */
     protected $countriesInfo;
     protected $commonNames;
     protected $officialNames;
+
     public function __construct($countriesInfo)
     {
         $this->countriesInfo = $countriesInfo;
@@ -29,7 +38,7 @@ class CountryName extends AbstractHelper
         $return = '';
         if ($addFlag) {
             $return = '<span class="' .
-            $this->view->escapeHtmlAttr('flag-icon flag-icon-' . strtolower($countryCode)) .
+            Escape::htmlAttr('flag-icon flag-icon-' . strtolower($countryCode)) .
             '"></span>&nbsp;';
         }
         if ($commonOrOfficial === 'official') {

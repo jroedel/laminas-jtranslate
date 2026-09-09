@@ -122,14 +122,13 @@ return [
      * is not an error laminas reports.
      */
 
-    'view_helpers' => [
-        'factories' => [
-            'flag'                  => View\Helper\Service\FlagFactory::class,
-            'countryName'           => View\Helper\Service\CountryNameFactory::class,
-        ],
-        'invokables' => [
-        ],
-    ],
+    /**
+     * **No `view_helpers` key any more.** `flag` and `countryName` were the last two, and
+     * both became plain classes on 2026-09 — see JTranslate\View\Escape for what replaced
+     * the renderer they reached through. A host constructs them itself now; the two
+     * factories under src/View/Helper/Service are what a laminas host would still use and
+     * nothing here does.
+     */
     /**
      * Registered lazily by service id, so declaring them costs nothing until one is
      * the command being run. See src/Console/Command for what each is for; the short
