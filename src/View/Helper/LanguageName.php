@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace JTranslate\View\Helper;
 
-use Laminas\View\Helper\AbstractHelper;
 use Locale;
 
 /**
@@ -27,7 +26,7 @@ use Locale;
  * string, never as the raw code. ICU signals "unrecognised" by echoing the input back,
  * which is the check below.
  */
-class LanguageName extends AbstractHelper
+class LanguageName
 {
     protected ?string $defaultLanguage = null;
 

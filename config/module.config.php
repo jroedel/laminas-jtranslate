@@ -128,7 +128,6 @@ return [
             'countryName'           => View\Helper\Service\CountryNameFactory::class,
         ],
         'invokables' => [
-            'languageName'          => View\Helper\LanguageName::class,
         ],
     ],
     /**
