@@ -135,8 +135,7 @@ Everything lives under the `jtranslate` key.
 | `navigation_text_domain` | the text domain the navigation helper renders in, default `Application`. Unlike every other view helper the menu is *not* translated in the dispatched controller's namespace: it is one tree shown on every page, so its strings belong to whichever domain owns the menu |
 | `locales_to_translate` | the locales the GUI offers. Merged additively by Laminas' config merger, so a numeric-keyed list in application config **appends to** the module's defaults rather than replacing them. |
 | `root_directory` | where compiled catalogs are written, default `getcwd()` |
-| `cache_options` | a Laminas cache storage configuration |
-| `cache_service` | alternatively, the service id of an existing PSR-16 cache. This is the seam a non-Laminas host uses. |
+| `cache_service` | service id of a host-provided `Psr\SimpleCache\CacheInterface`, or `null` for no persistent cache. This module builds no cache of its own; `PhraseCache` memoises per request either way. |
 | `max_cache_item_bytes` | default 2 MiB — see [Caching](#caching) |
 
 ## How it works

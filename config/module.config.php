@@ -5,7 +5,6 @@ namespace JTranslate;
 use Laminas\Router\Http\Segment;
 use Laminas\Router\Http\Literal;
 use Laminas\Db\Adapter\Adapter;
-use Laminas\Serializer\Adapter\Json;
 
 return [
     'jtranslate' => [
@@ -37,26 +36,17 @@ return [
         //the menu. 'Application' is the host application's conventional name for it.
         'navigation_text_domain' => 'Application',
 
-        // cache options have to be compatible with Laminas\Cache\StorageFactory::factory
-        'cache_options' => [
-            'adapter' => [
-                'name'    => 'filesystem',
-                // With a namespace we can indicate the same type of items
-                // -> So we can simple use the db id as cache key
-                'options' => [
-                    'ttl'       => 3600 * 24, //1 day
-                    'namespace' => 'JTranslate'
-                ],
-            ],
-            'plugins' => [
-                [
-                    'name' => 'serializer',
-                    'options' => [
-                        'serializer' => Json::class,
-                    ],
-                ],
-            ],
-        ],
+        /**
+         * The service id of a `Psr\SimpleCache\CacheInterface` the host provides, or null
+         * for no persistent cache — `PhraseCache` still memoises per request, so the module
+         * works either way and merely re-reads the phrase index once per request.
+         *
+         * This module builds no cache of its own since 2026-09. It used to assemble a
+         * laminas-cache storage from a `cache_options` block here, which made a translation
+         * library depend on a cache implementation and was the last thing that needed
+         * laminas-cache.
+         */
+        'cache_service' => null,
     ],
     'translator' => [
         'translation_file_patterns' => [

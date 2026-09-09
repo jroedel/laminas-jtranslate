@@ -5,30 +5,29 @@ declare(strict_types=1);
 namespace JTranslate\Service;
 
 use JTranslate\Cache\PhraseCache;
-use Laminas\Cache\Psr\SimpleCache\SimpleCacheDecorator;
-use Laminas\Cache\Service\StorageAdapterFactoryInterface;
-use Laminas\Cache\Storage\StorageInterface;
 use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 use Psr\SimpleCache\CacheInterface;
-use Throwable;
 
-use function class_exists;
-use function is_array;
 use function is_int;
+use function is_string;
 
 /**
- * Builds the {@see PhraseCache} the model uses, from whatever cache the host
- * application has configured.
+ * Builds {@see PhraseCache} around whatever PSR-16 cache the host provides.
  *
- * The model itself depends only on PhraseCache, which depends only on PSR-16. All the
- * laminas-cache knowledge — the storage adapter factory, the 2.x-to-3.x config shape
- * translation, the PSR-16 decorator — is confined to this file, so a Symfony host can
- * bind a PhraseCache built from any PSR-16 implementation and change nothing else.
+ * **The host provides the cache; this module builds none.** Until 2026-09 this factory
+ * could also assemble a laminas-cache storage from `jtranslate.cache_options` and wrap it
+ * in laminas's PSR-16 decorator. That made a translation library depend on a cache
+ * implementation, which is backwards — and it is the last thing here that needed
+ * laminas-cache, so it goes with it.
  *
- * Every failure path here degrades to a cache-less PhraseCache rather than throwing.
- * A misconfigured cache should make the site slow, not down; that is a lesson from
- * this codebase's own history rather than a general principle.
+ * A host names its cache service in `jtranslate.cache_service`; the service must return a
+ * `Psr\SimpleCache\CacheInterface`. schoenstatt.link points it at a
+ * `SionModel\Cache\ApcuStorage`, which implements that interface directly.
+ *
+ * Configuring nothing is allowed and means no *persistent* cache: `PhraseCache` keeps its
+ * per-request memory either way, so the module works and merely re-reads the phrase index
+ * once per request.
  */
 class PhraseCacheFactory implements FactoryInterface
 {
@@ -42,8 +41,7 @@ class PhraseCacheFactory implements FactoryInterface
         ?array $options = null
     ): PhraseCache {
         /** @var array<string, mixed> $config */
-        $config = $container->get('JTranslate\Config');
-
+        $config       = $container->get('JTranslate\Config');
         $maxItemBytes = is_int($config['max_cache_item_bytes'] ?? null)
             ? $config['max_cache_item_bytes']
             : 2097152;
@@ -51,53 +49,15 @@ class PhraseCacheFactory implements FactoryInterface
         return new PhraseCache($this->psrCache($container, $config), $maxItemBytes);
     }
 
-    /**
-     * @param array<string, mixed> $config
-     */
+    /** @param array<string, mixed> $config */
     private function psrCache(ContainerInterface $container, array $config): ?CacheInterface
     {
-        //An application that already has a PSR-16 cache can name its service and skip
-        //everything below. This is the seam a Symfony host uses.
         $service = $config['cache_service'] ?? null;
-        if (is_string($service) && $container->has($service)) {
-            $cache = $container->get($service);
-
-            return $cache instanceof CacheInterface ? $cache : null;
-        }
-
-        $storage = $this->storage($container, $config);
-
-        return null === $storage ? null : new SimpleCacheDecorator($storage);
-    }
-
-    /**
-     * @param array<string, mixed> $config
-     */
-    private function storage(ContainerInterface $container, array $config): ?StorageInterface
-    {
-        $options = $config['cache_options'] ?? null;
-        if (! is_array($options) || ! $container->has(StorageAdapterFactoryInterface::class)) {
+        if (! is_string($service) || ! $container->has($service)) {
             return null;
         }
+        $cache = $container->get($service);
 
-        //Deployment configs for this module predate laminas-cache 3 and are still
-        //written in StorageFactory::factory() shape. SionModel carries the translation
-        //between the two, but requiring SionModel to build a cache would undo the point
-        //of this refactor, so it is used when present and skipped when not.
-        $legacy = 'SionModel\Cache\LegacyCacheConfig';
-        if (class_exists($legacy)) {
-            /** @var array<string, mixed> $options */
-            $options = $legacy::translate($options);
-        }
-
-        try {
-            /** @var StorageAdapterFactoryInterface $factory */
-            $factory = $container->get(StorageAdapterFactoryInterface::class);
-
-            return $factory->createFromArrayConfiguration($options);
-        } catch (Throwable) {
-            //an unusable cache configuration is not a reason to refuse to translate
-            return null;
-        }
+        return $cache instanceof CacheInterface ? $cache : null;
     }
 }
