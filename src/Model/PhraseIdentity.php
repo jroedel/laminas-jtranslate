@@ -12,7 +12,7 @@ use function str_replace;
  * What makes two phrases the same phrase.
  *
  * The answer is byte identity, because that is the relation
- * `Laminas\I18n\Translator` applies to its catalog keys: a lookup for `Save` will
+ * the translator applies to its catalog keys: a lookup for `Save` will
  * never find a catalog entry for `save`, so the two are different phrases and must be
  * different rows. Nothing in MySQL expresses that relation — `utf8mb4_unicode_520_ci`
  * is case-insensitive, accent-insensitive and PAD SPACE, and even `utf8mb4_bin` cannot
