@@ -6,6 +6,7 @@ use Laminas\Db\Adapter\Adapter;
 use Laminas\Form\Form;
 use Laminas\InputFilter\InputFilterProviderInterface;
 use Laminas\Validator\Db\RecordExists;
+use SionModel\Form\CsrfSpec;
 
 class EditPhraseForm extends Form implements InputFilterProviderInterface
 {
@@ -153,6 +154,7 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
         }
 
         $specification = [
+            'security' => CsrfSpec::forElement($this->get('security')),
             'phraseId' => [
                 'required' => true,
                 'filters' => [
