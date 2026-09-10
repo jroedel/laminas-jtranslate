@@ -6,11 +6,13 @@ namespace JTranslate\Form;
 
 use JTranslate\I18n\LanguageMap;
 use Laminas\Db\Adapter\Adapter;
-use Laminas\InputFilter\InputFilterInterface;
+use Laminas\Validator\StringLength;
+use SionModel\Form\Validation\FormSpecification;
+use SionModel\Form\Validation\InputFilter as Engine;
 
 /**
- * {@see EditPhraseForm}'s rules as something with no browser behind it: one
- * `InputFilter`, built with no MVC, no session and no rendered form.
+ * {@see EditPhraseForm}'s rules as something with no browser behind it, built with no
+ * MVC, no session and no rendered form.
  *
  * ## Why this is the library's job and not the application's
  *
@@ -37,8 +39,8 @@ use Laminas\InputFilter\InputFilterInterface;
  * this repository notices.
  *
  * So the contract moves here. What this class promises is "the rules a translator is
- * held to, as an InputFilter"; how those rules are expressed is free to change behind
- * it, and 3.0 has to keep the promise while replacing the form.
+ * held to, as something you can put data through"; how those rules are expressed is free
+ * to change behind it, and 3.0 has to keep the promise while replacing the form.
  *
  * ## It is not a Laminas\Validator
  *
@@ -118,31 +120,80 @@ final class PhraseValidator
     }
 
     /**
-     * A fresh input filter, every call.
+     * A fresh engine over the form's rules, every call.
      *
-     * Never shared: an `InputFilter` holds the data and the messages of whatever was
-     * last validated through it, so handing the same instance to two requests would
-     * leak one caller's submission into another's. This object is stateless and safe
-     * to share; the filter it builds is not, which is why this is a method and not a
-     * property.
+     * Never shared: the engine holds the data and the messages of whatever was last
+     * validated through it, so handing the same instance to two requests would leak one
+     * caller's submission into another's. This object is stateless and safe to share; what
+     * it builds is not, which is why this is a method and not a property.
      *
-     * @return InputFilterInterface<array<string, mixed>>
+     * The CSRF rule is removed by dropping its key. A specification is plain data, so the
+     * exemption is an `unset` where the assembled laminas filter this replaced needed
+     * `has()` and `remove()` on an object graph.
      */
-    public function inputFilter(): InputFilterInterface
+    public function inputFilter(): Engine
     {
-        $form = new EditPhraseForm(
+        $spec = $this->specification();
+        unset($spec[self::SESSION_ONLY_INPUT]);
+
+        return Engine::withLaminasRules($spec);
+    }
+
+    /**
+     * How long a translation may be, for a caller that wants to publish the rule rather
+     * than apply it.
+     *
+     * Read out of the specification rather than returned as a constant, so the number a
+     * public schema advertises cannot drift from the number a submission is held to. The
+     * schema endpoint used to dig this out of the assembled filter's validator chain —
+     * `$filter->get($locale)->getValidatorChain()->getValidators()` — which meant the
+     * application knew that translations are keyed by locale and that the bound is a
+     * `StringLength`. Both are this module's business.
+     *
+     * Null when there is no writable locale, or when its rules name no length bound.
+     */
+    public function maxTranslationLength(): ?int
+    {
+        $locales = $this->writableLocales();
+        if ([] === $locales) {
+            return null;
+        }
+
+        /** @var array<string, mixed> $rules */
+        $rules = $this->specification()[$locales[0]] ?? [];
+        /** @var list<array<string, mixed>> $validators */
+        $validators = $rules['validators'] ?? [];
+
+        foreach ($validators as $validator) {
+            //Either spelling: a specification may name a validator by class or by the
+            //short name the plugin manager resolves.
+            $name = (string) ($validator['name'] ?? '');
+            if (StringLength::class !== $name && 'StringLength' !== $name) {
+                continue;
+            }
+
+            $max = $validator['options']['max'] ?? null;
+
+            return null === $max ? null : (int) $max;
+        }
+
+        return null;
+    }
+
+    /**
+     * The form's whole specification, CSRF included — what a caller reads when it wants to
+     * publish a rule rather than apply one.
+     *
+     * @return array<string, mixed>
+     */
+    public function specification(): array
+    {
+        return FormSpecification::of(new EditPhraseForm(
             $this->localeMap(),
             $this->phrasesTableName,
             $this->translationsTableName,
             $this->adapter
-        );
-
-        $filter = $form->getInputFilter();
-        if ($filter->has(self::SESSION_ONLY_INPUT)) {
-            $filter->remove(self::SESSION_ONLY_INPUT);
-        }
-
-        return $filter;
+        ));
     }
 
     /**
