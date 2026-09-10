@@ -2,7 +2,7 @@
 
 namespace JTranslate\Form;
 
-use Laminas\Form\Form;
+use SionModel\Form\Form;
 use Laminas\InputFilter\InputFilterProviderInterface;
 use SionModel\Form\CsrfSpec;
 
