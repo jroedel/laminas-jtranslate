@@ -4,6 +4,7 @@ namespace JTranslate\Form;
 
 use Laminas\Form\Form;
 use Laminas\InputFilter\InputFilterProviderInterface;
+use SionModel\Form\CsrfSpec;
 
 class DeletePhraseForm extends Form implements InputFilterProviderInterface
 {
@@ -56,8 +57,23 @@ class DeletePhraseForm extends Form implements InputFilterProviderInterface
         ]);
     }
 
+    /**
+     * Only the CSRF token: `submit` is a button rather than data, and this form carries
+     * no fields of its own.
+     *
+     * `security` is stated here even though `Laminas\Form\Element\Csrf` supplies the
+     * validator itself. That was the reasoning this docblock used to give for returning
+     * an empty array, and it stops being safe at step 5:
+     * `SionModel\Form\Validation\InputFilter` reads the specification and nothing else,
+     * so a check that exists only on the element is a check the cutover removes. See
+     * SionModel\Form\CsrfSpec.
+     *
+     * @return array<string, mixed>
+     */
     public function getInputFilterSpecification()
     {
-        return [];
+        return [
+            'security' => CsrfSpec::forElement($this->get('security')),
+        ];
     }
 }
