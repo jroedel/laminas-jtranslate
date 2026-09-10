@@ -3,7 +3,7 @@
 namespace JTranslate\Form;
 
 use Laminas\Db\Adapter\Adapter;
-use Laminas\Form\Form;
+use SionModel\Form\Form;
 use Laminas\InputFilter\InputFilterProviderInterface;
 use Laminas\Validator\Db\RecordExists;
 use SionModel\Form\CsrfSpec;
