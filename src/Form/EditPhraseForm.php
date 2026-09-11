@@ -4,8 +4,8 @@ namespace JTranslate\Form;
 
 use Laminas\Db\Adapter\Adapter;
 use SionModel\Form\Form;
-use Laminas\InputFilter\InputFilterProviderInterface;
-use Laminas\Validator\Db\RecordExists;
+use SionModel\Form\InputFilterProviderInterface;
+use SionModel\Validator\Db\RecordExists;
 use SionModel\Form\CsrfSpec;
 
 class EditPhraseForm extends Form implements InputFilterProviderInterface
@@ -145,7 +145,7 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
      * trans_translations.translation, a varchar(2000) NOT NULL, from where it is
      * rendered on every page of the site in that locale.
      *
-     * @see \Laminas\InputFilter\InputFilterProviderInterface::getInputFilterSpecification()
+     * @see \SionModel\Form\InputFilterProviderInterface::getInputFilterSpecification()
      */
     public function getInputFilterSpecification()
     {
@@ -158,12 +158,12 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
             'phraseId' => [
                 'required' => true,
                 'filters' => [
-                    ['name' => 'Laminas\Filter\ToInt'],
+                    ['name' => 'SionModel\Filter\ToInt'],
                 ],
                 'validators' => [
-                    ['name' => 'Laminas\Validator\Digits'],
+                    ['name' => 'SionModel\Validator\Digits'],
                     [
-                        'name'    => 'Laminas\Validator\Db\RecordExists',
+                        'name'    => 'SionModel\Validator\Db\RecordExists',
                         'options' => [
                             'table' => $this->phrasesTableName,
                             'field' => 'translation_phrase_id',
@@ -182,11 +182,11 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
                 'required' => false,
                 'allow_empty' => true,
                 'filters' => [
-                    ['name' => 'Laminas\Filter\StringTrim'],
+                    ['name' => 'SionModel\Filter\StringTrim'],
                 ],
                 'validators' => [
                     [
-                        'name' => 'Laminas\Validator\StringLength',
+                        'name' => 'SionModel\Validator\StringLength',
                         'options' => ['max' => self::PHRASE_MAX_LENGTH],
                     ],
                 ],
@@ -208,11 +208,11 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
                 'required' => false,
                 'allow_empty' => true,
                 'filters' => [
-                    ['name' => 'Laminas\Filter\StringTrim'],
+                    ['name' => 'SionModel\Filter\StringTrim'],
                 ],
                 'validators' => [
                     [
-                        'name' => 'Laminas\Validator\StringLength',
+                        'name' => 'SionModel\Validator\StringLength',
                         'options' => ['max' => self::TRANSLATION_MAX_LENGTH],
                     ],
                 ],
@@ -225,10 +225,10 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
                 'required' => false,
                 'allow_empty' => true,
                 'filters' => [
-                    ['name' => 'Laminas\Filter\ToInt'],
+                    ['name' => 'SionModel\Filter\ToInt'],
                 ],
                 'validators' => [
-                    ['name' => 'Laminas\Validator\Digits'],
+                    ['name' => 'SionModel\Validator\Digits'],
                 ],
             ];
         }

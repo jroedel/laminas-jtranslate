@@ -6,7 +6,7 @@ namespace JTranslate\Form;
 
 use JTranslate\I18n\LanguageMap;
 use Laminas\Db\Adapter\Adapter;
-use Laminas\Validator\StringLength;
+use SionModel\Validator\StringLength;
 use SionModel\Form\Validation\FormSpecification;
 use SionModel\Form\Validation\InputFilter as Engine;
 
@@ -46,7 +46,7 @@ use SionModel\Form\Validation\InputFilter as Engine;
  *
  * The name is kept from the caller that introduced it and matches its sibling on the
  * association side of that application. It validates, but it does not implement
- * `Laminas\Validator\ValidatorInterface` and is not usable in a validator chain.
+ * `SionModel\Validator\ValidatorInterface` and is not usable in a validator chain.
  *
  * ## The static adapter, retired
  *
@@ -63,7 +63,7 @@ final class PhraseValidator
     /**
      * The one input a caller with no browser session is not held to.
      *
-     * `Laminas\Validator\Csrf` reads a `Laminas\Session\Container`, so leaving it in
+     * `SionModel\Validator\Csrf` reads a `Laminas\Session\Container`, so leaving it in
      * place would be a fatal rather than a validation failure — and would refuse every
      * such caller regardless of what it submitted.
      */
@@ -136,7 +136,7 @@ final class PhraseValidator
         $spec = $this->specification();
         unset($spec[self::SESSION_ONLY_INPUT]);
 
-        return Engine::withLaminasRules($spec);
+        return Engine::withRules($spec);
     }
 
     /**
