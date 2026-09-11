@@ -41,7 +41,7 @@ class DeletePhraseForm extends Form implements InputFilterProviderInterface
         //catalogs, so the site stops serving those strings. See docs/translation.md on why a
         //phrase is retired rather than deleted in the first place.
         //
-        //Laminas\Form\Element\Button carries `type => button` in its own $attributes, so
+        //SionModel\Form\Element\Button carries `type => button` in its own $attributes, so
         //naming the type is the whole fix on the browser's side; deleteAction() carries the
         //server-side half for a hand-crafted POST.
         $this->add([
@@ -61,10 +61,10 @@ class DeletePhraseForm extends Form implements InputFilterProviderInterface
      * Only the CSRF token: `submit` is a button rather than data, and this form carries
      * no fields of its own.
      *
-     * `security` is stated here even though `Laminas\Form\Element\Csrf` supplies the
-     * validator itself. That was the reasoning this docblock used to give for returning
-     * an empty array, and it stops being safe at step 5:
-     * `SionModel\Form\Validation\InputFilter` reads the specification and nothing else,
+     * `security` is stated here because nothing else states it. `Laminas\Form\Element\Csrf`
+     * used to supply the validator itself, which was this docblock's reason for returning
+     * an empty array; `SionModel\Form\Element\Csrf` supplies no input specification at all,
+     * and `SionModel\Form\Validation\InputFilter` reads the specification and nothing else,
      * so a check that exists only on the element is a check the cutover removes. See
      * SionModel\Form\CsrfSpec.
      *
