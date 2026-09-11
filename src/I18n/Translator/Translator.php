@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace JTranslate\I18n\Translator;
 
 use Laminas\Translator\TranslatorInterface as LaminasTranslatorInterface;
-use Laminas\Validator\Translator\TranslatorInterface as ValidatorTranslatorInterface;
 use Locale;
 
 use function is_array;
@@ -23,15 +22,13 @@ use function sprintf;
  * gettext and INI formats, cache layer and event manager this application used none of.
  * What it used is here: **a message, a text domain, a locale, and a fallback.**
  *
- * ## Two interfaces, and both are deliberate
+ * ## One interface, and it is not this module's
  *
- * `Laminas\Translator\TranslatorInterface` is an interface-only package and the shape
- * laminas-validator 3 will require. `Laminas\Validator\Translator\TranslatorInterface` is
- * the one the installed 2.x `AbstractValidator::setDefaultTranslator()` type-hints, and is
- * `@deprecated` for exactly that reason. The two declare the same `translate()`, so one
- * class satisfies both: validators keep working today and keep working after their v3
- * upgrade, and the `Laminas\Validator\Translator\Translator` adapter that used to bridge
- * them — itself `@deprecated` — is gone.
+ * `Laminas\Translator\TranslatorInterface` is an interface-only package — one file, no
+ * implementation — and it is what {@see \SionModel\Validator\AbstractValidator} type-hints
+ * on `setDefaultTranslator()`, so validator messages are translated by this class without
+ * either side knowing about the other. It is the last laminas package this file names, and
+ * it leaves in the iteration that takes laminas-translator itself.
  *
  * ## Lookup order, transcribed rather than invented
  *
@@ -57,7 +54,7 @@ use function sprintf;
  * has already compiled. There is no cache layer here on purpose: the file *is* the cache,
  * and laminas-i18n's optional one existed for the formats that need parsing.
  */
-final class Translator implements LaminasTranslatorInterface, ValidatorTranslatorInterface
+final class Translator implements LaminasTranslatorInterface
 {
     public const DEFAULT_TEXT_DOMAIN = 'default';
 
