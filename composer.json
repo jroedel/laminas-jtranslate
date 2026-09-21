@@ -23,7 +23,6 @@
         "psr/simple-cache": "^2.0 || ^3.0",
         "laminas/laminas-db": "^2.15",
         "laminas/laminas-translator": "^1.0",
-        "laminas/laminas-modulemanager": "^2.11",
         "laminas/laminas-router": "^3.5",
         "laminas/laminas-servicemanager": "^3.11",
         "psr/log": "^3.0",
