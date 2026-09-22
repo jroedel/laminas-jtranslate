@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace JTranslate\Migration;
 
-use Laminas\Db\Adapter\Adapter;
-use Laminas\Db\Adapter\AdapterInterface;
+use SionModel\Db\Connection;
 use RuntimeException;
 
 use function count;
@@ -92,7 +91,7 @@ final class MigrationRunner
      * @param array<string, mixed> $config the resolved `jtranslate` config
      */
     public function __construct(
-        private readonly AdapterInterface $db,
+        private readonly Connection $db,
         private readonly array $config,
     ) {
     }
@@ -126,9 +125,8 @@ final class MigrationRunner
             return [];
         }
 
-        $result  = $this->db->query(
-            sprintf('SELECT `migration`, `applied_on` FROM `%s`', self::TRACKING_TABLE),
-            Adapter::QUERY_MODE_EXECUTE
+        $result  = $this->db->select(
+            sprintf('SELECT `migration`, `applied_on` FROM `%s`', self::TRACKING_TABLE)
         );
         $applied = [];
         foreach ($result as $row) {
@@ -180,7 +178,7 @@ final class MigrationRunner
     {
         $statements = $this->preview($migration);
         foreach ($statements as $statement) {
-            $this->db->query($statement['sql'], $statement['parameters'] ?: Adapter::QUERY_MODE_EXECUTE);
+            $this->db->execute($statement['sql'], $statement['parameters']);
         }
         $this->markApplied($migration->name());
 
@@ -197,7 +195,7 @@ final class MigrationRunner
     public function markApplied(string $name): void
     {
         $this->ensureTrackingTable();
-        $this->db->query(
+        $this->db->execute(
             sprintf(
                 'INSERT INTO `%s` (`migration`, `applied_on`) VALUES (?, ?) '
                 . 'ON DUPLICATE KEY UPDATE `applied_on` = `applied_on`',
@@ -231,7 +229,7 @@ final class MigrationRunner
         }
 
         try {
-            $this->db->query($this->trackingTableSql(), Adapter::QUERY_MODE_EXECUTE);
+            $this->db->execute($this->trackingTableSql());
         } catch (\Throwable $e) {
             throw new RuntimeException(
                 sprintf(
@@ -252,7 +250,7 @@ final class MigrationRunner
     {
         //information_schema rather than SHOW TABLES so the check is one prepared
         //statement with a parameter, and reads only from the current schema
-        $result = $this->db->query(
+        $result = $this->db->select(
             'SELECT COUNT(*) AS c FROM information_schema.TABLES '
             . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
             [self::TRACKING_TABLE]

@@ -2,7 +2,7 @@
 
 namespace JTranslate\Form;
 
-use Laminas\Db\Adapter\Adapter;
+use SionModel\Db\Connection;
 use SionModel\Form\Form;
 use SionModel\Form\InputFilterProviderInterface;
 use SionModel\Validator\Db\RecordExists;
@@ -41,7 +41,7 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
      */
     protected $inputFilterSpecification;
     /**
-     * @param Adapter $adapter the adapter the `RecordExists` validator on `phraseId`
+     * @param Connection $adapter the adapter the `RecordExists` validator on `phraseId`
      *                needs. Required, and passed in rather than read from
      *                `Laminas\Db\TableGateway\Feature\GlobalAdapterFeature`'s static
      *                registry, which only `JUser\Module::onBootstrap()` ever
@@ -53,7 +53,7 @@ class EditPhraseForm extends Form implements InputFilterProviderInterface
         $locales,
         $phrasesTableName,
         $translationsTableName,
-        private readonly Adapter $adapter
+        private readonly Connection $adapter
     ) {
         // we want to ignore the name passed
         parent::__construct('edit_phrase');

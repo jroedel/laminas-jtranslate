@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace JTranslate\Migration;
 
-use Laminas\Db\Adapter\AdapterInterface;
+use SionModel\Db\Connection;
 
 /**
  * What the current schema already has, so a migration can emit only the clauses that
@@ -29,7 +29,7 @@ use Laminas\Db\Adapter\AdapterInterface;
  */
 final class SchemaInspector
 {
-    public function __construct(private readonly AdapterInterface $db)
+    public function __construct(private readonly Connection $db)
     {
     }
 
@@ -69,7 +69,7 @@ final class SchemaInspector
      */
     public function columnType(string $table, string $column): ?string
     {
-        $result = $this->db->query(
+        $result = $this->db->select(
             'SELECT LOWER(`DATA_TYPE`) AS t FROM information_schema.COLUMNS '
             . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
             [$table, $column]
@@ -87,7 +87,7 @@ final class SchemaInspector
      */
     private function count(string $sql, array $parameters): int
     {
-        $result = $this->db->query($sql, $parameters);
+        $result = $this->db->select($sql, $parameters);
         foreach ($result as $row) {
             return (int) $row['c'];
         }

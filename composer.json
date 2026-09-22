@@ -21,7 +21,6 @@
         "ext-intl": "*",
         "psr/container": "^1.1 || ^2.0",
         "psr/simple-cache": "^2.0 || ^3.0",
-        "laminas/laminas-db": "^2.15",
         "psr/log": "^3.0",
         "symfony/http-foundation": "^7.0",
         "twig/twig": "^3.0",

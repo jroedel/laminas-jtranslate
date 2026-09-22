@@ -2,7 +2,7 @@
 
 namespace JTranslate;
 
-use Laminas\Db\Adapter\Adapter;
+use SionModel\Db\Connection;
 
 return [
     'jtranslate' => [
@@ -107,7 +107,7 @@ return [
                 => Service\RetirePhrasesCommandFactory::class,
         ],
         'aliases' => [
-            'jtranslate_db_adapter' => Adapter::class,
+            'jtranslate_db_adapter' => Connection::class,
             //the host's decorated translator — laminas-mvc-i18n's id, kept by the host's
             //own factory after that package left
             'jtranslate_translator' => 'MvcTranslator',

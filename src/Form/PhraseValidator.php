@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace JTranslate\Form;
 
 use JTranslate\I18n\LanguageMap;
-use Laminas\Db\Adapter\Adapter;
+use SionModel\Db\Connection;
 use SionModel\Validator\StringLength;
 use SionModel\Form\Validation\FormSpecification;
 use SionModel\Form\Validation\InputFilter as Engine;
@@ -54,7 +54,7 @@ use SionModel\Form\Validation\InputFilter as Engine;
  * registry before building the form, because the form read it from there. The section
  * that stood here said plainly that a process-global write was the wrong answer and
  * that this was one named place rather than a fix. It is gone as of 2026-08-14:
- * `EditPhraseForm` takes an `Adapter`, so the adapter travels down the constructor and
+ * `EditPhraseForm` takes an `Connection`, so the adapter travels down the constructor and
  * no code in either module touches the registry. Nothing about this class's promise
  * changed — only that it no longer has to keep a global honest to deliver it.
  */
@@ -78,7 +78,7 @@ final class PhraseValidator
         private readonly array $locales,
         private readonly string $phrasesTableName,
         private readonly string $translationsTableName,
-        private readonly Adapter $adapter
+        private readonly Connection $adapter
     ) {
     }
 

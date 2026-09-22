@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace JTranslate\Service;
 
 use JTranslate\Migration\MigrationRunner;
-use Laminas\Db\Adapter\Adapter;
+use SionModel\Db\Connection;
 use Psr\Container\ContainerInterface;
 
 class MigrationRunnerFactory
@@ -25,6 +25,6 @@ class MigrationRunnerFactory
         //Deliberately the application's own adapter and no other. Supplying elevated
         //credentials here would put DDL rights in the container for every request to
         //reach; the answer to the missing rights is --pretend, not a second adapter.
-        return new MigrationRunner($container->get(Adapter::class), $config);
+        return new MigrationRunner($container->get(Connection::class), $config);
     }
 }

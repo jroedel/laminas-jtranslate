@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace JTranslate\Migration;
 
 use JTranslate\Model\PhraseIdentity;
-use Laminas\Db\Adapter\AdapterInterface;
+use SionModel\Db\Connection;
 use RuntimeException;
 
 use function array_key_exists;
@@ -76,7 +76,7 @@ final class M002SeedUiPhrases implements MigrationInterface
      * @param array<string, mixed> $config
      * @return list<array{sql: string, parameters: list<mixed>}>
      */
-    public function statements(AdapterInterface $db, array $config): array
+    public function statements(Connection $db, array $config): array
     {
         $project = $config['project_name'] ?? null;
         if (! is_string($project) || '' === $project) {
@@ -176,9 +176,9 @@ final class M002SeedUiPhrases implements MigrationInterface
     /**
      * @return array<string, int> hex phrase hash => id
      */
-    private function existingPhraseHashes(AdapterInterface $db, string $table, string $project): array
+    private function existingPhraseHashes(Connection $db, string $table, string $project): array
     {
-        $result = $db->query(
+        $result = $db->select(
             sprintf(
                 'SELECT `translation_phrase_id`, LOWER(HEX(`phrase_hash`)) AS `hex_hash` FROM `%s` '
                 . 'WHERE `project` = ? AND `text_domain` = ?',
@@ -199,12 +199,12 @@ final class M002SeedUiPhrases implements MigrationInterface
      * @return array<string, array<string, true>> hex phrase hash => locale => true
      */
     private function existingTranslationLocales(
-        AdapterInterface $db,
+        Connection $db,
         string $phrasesTable,
         string $transTable,
         string $project
     ): array {
-        $result = $db->query(
+        $result = $db->select(
             sprintf(
                 'SELECT LOWER(HEX(p.`phrase_hash`)) AS `hex_hash`, t.`locale` FROM `%s` p '
                 . 'JOIN `%s` t ON p.`translation_phrase_id` = t.`translation_phrase_id` '
