@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace JTranslate\I18n\Translator;
 
-use Laminas\Translator\TranslatorInterface as LaminasTranslatorInterface;
 use Locale;
 
 use function is_array;
@@ -22,13 +21,15 @@ use function sprintf;
  * gettext and INI formats, cache layer and event manager this application used none of.
  * What it used is here: **a message, a text domain, a locale, and a fallback.**
  *
- * ## One interface, and it is not this module's
+ * ## No interface, because nothing here consumes one
  *
- * `Laminas\Translator\TranslatorInterface` is an interface-only package — one file, no
- * implementation — and it is what {@see \SionModel\Validator\AbstractValidator} type-hints
- * on `setDefaultTranslator()`, so validator messages are translated by this class without
- * either side knowing about the other. It is the last laminas package this file names, and
- * it leaves in the iteration that takes laminas-translator itself.
+ * This class implemented `Laminas\Translator\TranslatorInterface` until 2026-09-21 and
+ * declares none now. Nothing inside this module ever type-hinted it — one implementation,
+ * zero internal consumers — so an interface here would have existed only to be exported.
+ * A package that needs a contract declares its own and states what *it* needs:
+ * {@see \SionModel\I18n\TranslatesMessages} is the one this class is bound to on
+ * schoenstatt.link, through a host class, because SionModel and this module are peers and
+ * neither requires the other.
  *
  * ## Lookup order, transcribed rather than invented
  *
@@ -54,7 +55,7 @@ use function sprintf;
  * has already compiled. There is no cache layer here on purpose: the file *is* the cache,
  * and laminas-i18n's optional one existed for the formats that need parsing.
  */
-final class Translator implements LaminasTranslatorInterface
+final class Translator
 {
     public const DEFAULT_TEXT_DOMAIN = 'default';
 
@@ -233,31 +234,6 @@ final class Translator implements LaminasTranslatorInterface
         }
 
         return $message;
-    }
-
-    /**
-     * Nothing in this application calls it — measured across the app and all three
-     * shared libraries at the laminas-i18n removal, 2026-09-09, zero call sites — and the
-     * catalogs have no plural forms to answer with. The interface requires it, so it
-     * answers the only thing it honestly can: the singular or the plural, translated as
-     * an ordinary message, by the English rule. A locale needing anything else should get
-     * a real implementation rather than this one silently doing the wrong thing.
-     *
-     * @param string $singular
-     * @param string $plural
-     * @param int $number
-     * @param string $textDomain
-     * @param string|null $locale
-     * @return string
-     */
-    public function translatePlural(
-        $singular,
-        $plural,
-        $number,
-        $textDomain = self::DEFAULT_TEXT_DOMAIN,
-        $locale = null
-    ) {
-        return $this->translate(1 === (int) $number ? $singular : $plural, $textDomain, $locale);
     }
 
     /** The catalog answer, or null when the domain has nothing for this message. */
