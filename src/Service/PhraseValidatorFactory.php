@@ -6,7 +6,7 @@ namespace JTranslate\Service;
 
 use JTranslate\Form\PhraseValidator;
 use JTranslate\Model\TranslationsTable;
-use Laminas\Db\Adapter\Adapter;
+use SionModel\Db\Connection;
 use Psr\Container\ContainerInterface;
 
 use function array_keys;
@@ -23,7 +23,7 @@ use function is_string;
  * `getLocaleNames()` does not know, and a caller reading `locales_to_translate` itself
  * would silently disagree with what `updatePhrase()` actually iterates.
  *
- * `Adapter::class` and not `AdapterInterface::class`: applications register the
+ * `Connection::class` and not `Connection::class`: applications register the
  * concrete class and nothing here aliases the interface.
  */
 class PhraseValidatorFactory
@@ -41,8 +41,8 @@ class PhraseValidatorFactory
         $table = $container->get(TranslationsTable::class);
         /** @var array<string, mixed>|\Traversable<string, mixed> $config */
         $config = $container->get('JTranslate\Config');
-        /** @var Adapter $adapter */
-        $adapter = $container->get(Adapter::class);
+        /** @var Connection $adapter */
+        $adapter = $container->get(Connection::class);
 
         $settings = is_array($config) ? $config : iterator_to_array($config);
 

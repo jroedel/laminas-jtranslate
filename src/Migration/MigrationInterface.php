@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace JTranslate\Migration;
 
-use Laminas\Db\Adapter\AdapterInterface;
+use SionModel\Db\Connection;
 
 /**
  * One irreversible, forward-only step in bringing a database up to what this
@@ -43,5 +43,5 @@ interface MigrationInterface
      * @param array<string, mixed> $config the resolved `jtranslate` config
      * @return list<array{sql: string, parameters: list<mixed>}>
      */
-    public function statements(AdapterInterface $db, array $config): array;
+    public function statements(Connection $db, array $config): array;
 }

@@ -2,7 +2,7 @@
 
 namespace JTranslate\Service;
 
-use Laminas\Db\Adapter\Adapter;
+use SionModel\Db\Connection;
 use Psr\Container\ContainerInterface;
 use JTranslate\Model\TranslationsTable;
 use JTranslate\Form\EditPhraseForm;
@@ -30,7 +30,7 @@ class EditPhraseFormFactory
             $locales,
             $config['phrases_table_name'],
             $config['translations_table_name'],
-            $container->get(Adapter::class)
+            $container->get(Connection::class)
         );
         return $form;
     }

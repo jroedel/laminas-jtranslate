@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace JTranslate\Migration;
 
-use Laminas\Db\Adapter\AdapterInterface;
+use SionModel\Db\Connection;
 
 use function sprintf;
 
@@ -145,7 +145,7 @@ final class M006CreateTranslationHistory implements MigrationInterface
      * @param array<string, mixed> $config
      * @return list<array{sql: string, parameters: list<mixed>}>
      */
-    public function statements(AdapterInterface $db, array $config): array
+    public function statements(Connection $db, array $config): array
     {
         $history = (string) ($config['translations_history_table_name'] ?? 'trans_translations_history');
         $schema  = new SchemaInspector($db);

@@ -2,21 +2,28 @@
 
 namespace JTranslate\Model;
 
-use Laminas\Db\Adapter\AdapterAwareInterface;
-use Laminas\Db\TableGateway\AbstractTableGateway;
-use Laminas\Db\Adapter\Adapter;
-use Laminas\Db\TableGateway\TableGatewayInterface;
-use Laminas\Db\Adapter\AdapterInterface;
-use Laminas\Db\Sql\Sql;
-use Laminas\Db\Sql\Where;
-use Laminas\Db\ResultSet\ResultSet;
+use SionModel\Db\Connection;
+use SionModel\Db\TableGateway;
+use SionModel\Db\Sql\Where;
+use SionModel\Db\ResultSet;
 use JTranslate\Cache\PhraseCache;
 use JTranslate\Service\ActingUserProviderInterface;
 use JTranslate\Service\UserDirectoryInterface;
 use JTranslate\Model\PhraseIdentity;
+use SionModel\Db\Sql\Delete;
+use SionModel\Db\Sql\Insert;
+use SionModel\Db\Sql\Select;
+use SionModel\Db\Sql\Update;
 
-class TranslationsTable extends AbstractTableGateway implements AdapterAwareInterface
+/**
+ * It extended `Laminas\Db\TableGateway\AbstractTableGateway` and implemented
+ * `AdapterAwareInterface` until 2026-09-22, and did nothing with either: it has no table of
+ * its own, it composes one gateway per table, and the base class was there to supply
+ * `$this->adapter`. That property is now declared where it is used.
+ */
+class TranslationsTable
 {
+
     /**
      * Every phrase this project has, as [text domain => [hex hash => is retired]].
      *
@@ -98,19 +105,19 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
     /**
      *
-     * @var AdapterInterface $adapter
+     * @var Connection $adapter
      */
     protected $adapter;
 
     /**
      *
-     * @var TableGatewayInterface $phrasesGateway
+     * @var TableGateway $phrasesGateway
      */
     protected $phrasesGateway;
 
     /**
      *
-     * @var TableGatewayInterface $translationsGateway
+     * @var TableGateway $translationsGateway
      */
     protected $translationsGateway;
 
@@ -184,8 +191,8 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
      * the project before the router had matched, so a request that never translated
      * anything still paid for it. It is now read on first use.
      *
-     * @param TableGatewayInterface $phrasesGateway
-     * @param TableGatewayInterface $translationsGateway
+     * @param TableGateway $phrasesGateway
+     * @param TableGateway $translationsGateway
      * @param PhraseCache $cache
      * @param array $config
      * @param ActingUserProviderInterface|null $actingUserProvider
@@ -216,7 +223,7 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
 
         $this->phrasesGateway       = $phrasesGateway;
         $this->translationsGateway  = $translationsGateway;
-        $this->adapter              = $phrasesGateway->getAdapter();
+        $this->adapter              = $phrasesGateway->connection();
         $this->config               = $config;
         $this->cache                = $cache;
         $this->actingUserProvider   = $actingUserProvider;
@@ -278,13 +285,12 @@ class TranslationsTable extends AbstractTableGateway implements AdapterAwareInte
     /**
      *  Set db adapter
      *
-     *  @param Adapter $adapter
+     *  @param Connection $adapter
      *  @return self
      */
-    public function setDbAdapter(Adapter $adapter)
+    public function setDbAdapter(Connection $adapter)
     {
          $this->adapter = $adapter;
-         $this->initialize();
          return $this;
     }
 
@@ -421,12 +427,11 @@ HAVING PhraseLocaleCount < ?";
      */
     public function countPhrases(array $criteria = [])
     {
-        $sql    = new Sql($this->adapter);
-        $select = $sql->select(['p' => $this->config['phrases_table_name']])
-            ->columns(['total' => new \Laminas\Db\Sql\Expression('COUNT(*)')]);
+        $select = (new Select(['p' => $this->config['phrases_table_name']]))
+            ->columns(['total' => new \SionModel\Db\Sql\Expression('COUNT(*)')]);
         $this->applyPhraseCriteria($select, $criteria);
 
-        $row = $sql->prepareStatementForSqlObject($select)->execute()->current();
+        $row = $this->adapter->select($select)->current();
 
         return is_array($row) ? (int) $row['total'] : 0;
     }
@@ -463,8 +468,7 @@ HAVING PhraseLocaleCount < ?";
      */
     public function getPhrasePage(array $criteria = [], $limit = 100, $offset = 0)
     {
-        $sql    = new Sql($this->adapter);
-        $select = $sql->select(['p' => $this->config['phrases_table_name']])
+        $select = (new Select(['p' => $this->config['phrases_table_name']]))
             ->columns([
                 'translation_phrase_id',
                 'text_domain',
@@ -482,7 +486,7 @@ HAVING PhraseLocaleCount < ?";
         $this->applyPhraseCriteria($select, $criteria);
 
         $rows = [];
-        foreach ($sql->prepareStatementForSqlObject($select)->execute() as $row) {
+        foreach ($this->adapter->select($select) as $row) {
             $rows[] = $row;
         }
 
@@ -512,8 +516,7 @@ HAVING PhraseLocaleCount < ?";
      */
     public function getPhraseById($id)
     {
-        $sql    = new Sql($this->adapter);
-        $select = $sql->select(['p' => $this->config['phrases_table_name']])
+        $select = (new Select(['p' => $this->config['phrases_table_name']]))
             ->columns([
                 'translation_phrase_id',
                 'text_domain',
@@ -527,7 +530,7 @@ HAVING PhraseLocaleCount < ?";
                 'p.project'               => $this->config['project_name'],
             ]);
 
-        $row = $sql->prepareStatementForSqlObject($select)->execute()->current();
+        $row = $this->adapter->select($select)->current();
         if (! is_array($row)) {
             return null;
         }
@@ -564,8 +567,7 @@ HAVING PhraseLocaleCount < ?";
             ];
         }
 
-        $sql    = new Sql($this->adapter);
-        $select = $sql->select($this->config['translations_table_name'])
+        $select = (new Select($this->config['translations_table_name']))
             ->columns([
                 'translation_id',
                 'translation_phrase_id',
@@ -577,7 +579,7 @@ HAVING PhraseLocaleCount < ?";
             ->where(['translation_phrase_id' => $ids]);
 
         $utc = new \DateTimeZone('UTC');
-        foreach ($sql->prepareStatementForSqlObject($select)->execute() as $row) {
+        foreach ($this->adapter->select($select) as $row) {
             $id     = (int) $row['translation_phrase_id'];
             $locale = $row['locale'];
             if (! isset($return[$id]) || null === $locale) {
@@ -606,7 +608,7 @@ HAVING PhraseLocaleCount < ?";
      * free. getTranslations($fromAllProjects = true) is the deliberate exception and
      * is reachable only from the admin GUI.
      *
-     * @param \Laminas\Db\Sql\Select $select
+     * @param \SionModel\Db\Sql\Select $select
      * @param array $criteria
      * @return void
      */
@@ -653,7 +655,7 @@ HAVING PhraseLocaleCount < ?";
         //agent a list that silently omits the phrases someone blanked.
         $translations = $this->config['translations_table_name'];
         if (isset($criteria['untranslatedIn']) && '' !== $criteria['untranslatedIn']) {
-            $where->addPredicate(new \Laminas\Db\Sql\Predicate\Expression(
+            $where->addPredicate(new \SionModel\Db\Sql\Expression(
                 'NOT EXISTS (SELECT 1 FROM `' . $translations . '` tx'
                 . ' WHERE tx.translation_phrase_id = p.translation_phrase_id'
                 . ' AND tx.locale = ? AND tx.translation <> \'\')',
@@ -661,7 +663,7 @@ HAVING PhraseLocaleCount < ?";
             ));
         }
         if (isset($criteria['translatedIn']) && '' !== $criteria['translatedIn']) {
-            $where->addPredicate(new \Laminas\Db\Sql\Predicate\Expression(
+            $where->addPredicate(new \SionModel\Db\Sql\Expression(
                 'EXISTS (SELECT 1 FROM `' . $translations . '` tx'
                 . ' WHERE tx.translation_phrase_id = p.translation_phrase_id'
                 . ' AND tx.locale = ? AND tx.translation <> \'\')',
@@ -782,10 +784,9 @@ HAVING PhraseLocaleCount < ?";
                     $dateString,
                     $notes
                 );
-                $sql    = new Sql($this->adapter);
-                $delete = $sql->delete($this->config['translations_table_name'])
+                $delete = (new Delete($this->config['translations_table_name']))
                     ->where(['translation_id' => $phrase[$key . 'Id']]);
-                $results[] = $sql->prepareStatementForSqlObject($delete)->execute();
+                $results[] = $this->adapter->execute($delete);
                 continue;
             }
 
@@ -810,20 +811,17 @@ HAVING PhraseLocaleCount < ?";
                     $dateString,
                     $notes
                 );
-                $sql = new Sql($this->adapter);
-                $update = $sql->update($this->config['translations_table_name'])
+                $update = (new Update($this->config['translations_table_name']))
                     ->set([
                         'translation' => $data[$key],
                         'modified_on' => $dateString,
                         'modified_by' => $actingUserId,
                     ])
                     ->where(['translation_id' => $phrase[$key . 'Id']]);
-                $statement = $sql->prepareStatementForSqlObject($update);
-                $results[] = $statement->execute();
+                $results[] = $this->adapter->execute($update);
             } else {
                 //insert then
-                $sql = new Sql($this->adapter);
-                $insert = $sql->insert($this->config['translations_table_name'])
+                $insert = (new Insert($this->config['translations_table_name']))
                 ->values([
                     'translation_phrase_id' => $id,
                     'locale' => $key,
@@ -831,8 +829,7 @@ HAVING PhraseLocaleCount < ?";
                     'modified_on' => $dateString,
                     'modified_by' => $actingUserId,
                 ]);
-                $statement = $sql->prepareStatementForSqlObject($insert);
-                $results[] = $statement->execute();
+                $results[] = $this->adapter->execute($insert);
             }
         }
         $this->invalidatePhraseCaches();
@@ -889,7 +886,7 @@ HAVING PhraseLocaleCount < ?";
             $this->config['translations_table_name'],
             $this->config['phrases_table_name']
         );
-        $this->adapter->query($sql, [$operation, $note, $actingUserId, $now, $translationId]);
+        $this->adapter->execute($sql, [$operation, $note, $actingUserId, $now, $translationId]);
     }
 
     /**
@@ -930,7 +927,7 @@ HAVING PhraseLocaleCount < ?";
             'SELECT `project`, `phrase_hash` FROM `%s` WHERE `translation_phrase_id` = ? AND `project` = ?',
             $this->config['phrases_table_name']
         );
-        $phrase = $this->adapter->query($sql, [(int) $phraseId, $this->config['project_name']])->current();
+        $phrase = $this->adapter->select($sql, [(int) $phraseId, $this->config['project_name']])->current();
         if (! is_array($phrase) && ! $phrase instanceof \ArrayObject) {
             return [];
         }
@@ -966,7 +963,7 @@ HAVING PhraseLocaleCount < ?";
         $users = $this->getUserTable()->getUsers();
 
         $rows = [];
-        foreach ($this->adapter->query($sql, $parameters) as $row) {
+        foreach ($this->adapter->select($sql, $parameters) as $row) {
             $row               = (array) $row;
             $row['writtenBy']  = $this->userName($users, $row['written_by'] ?? null);
             $row['replacedBy'] = $this->userName($users, $row['replaced_by'] ?? null);
@@ -1038,7 +1035,7 @@ HAVING PhraseLocaleCount < ?";
         );
 
         $counts = [];
-        foreach ($this->adapter->query($sql, [$this->config['project_name']]) as $row) {
+        foreach ($this->adapter->select($sql, [$this->config['project_name']]) as $row) {
             $row                            = (array) $row;
             $counts[(int) $row['phrase_id']] = (int) $row['entries'];
         }
@@ -1088,7 +1085,7 @@ HAVING PhraseLocaleCount < ?";
             . 'WHERE `project` = ? AND `text_domain` = ? AND `phrase_hash` = ? AND `retired_on` IS NULL',
             $this->config['phrases_table_name']
         );
-        $row = $this->adapter->query($sql, [
+        $row = $this->adapter->select($sql, [
             $this->config['project_name'],
             $textDomain,
             $hash,
@@ -1102,7 +1099,7 @@ HAVING PhraseLocaleCount < ?";
             'UPDATE `%s` SET `retired_on` = UTC_TIMESTAMP() WHERE `translation_phrase_id` = ?',
             $this->config['phrases_table_name']
         );
-        $this->adapter->query($sql, [$row['translation_phrase_id']]);
+        $this->adapter->execute($sql, [$row['translation_phrase_id']]);
 
         $this->recordPhraseEvent($row, self::OPERATION_RETIRE, $reason);
 
@@ -1183,7 +1180,7 @@ HAVING PhraseLocaleCount < ?";
             $this->config['phrases_table_name'],
             $retire ? 'NULL' : 'NOT NULL'
         );
-        $row = $this->adapter->query($sql, [$this->config['project_name'], (int) $id])->current();
+        $row = $this->adapter->select($sql, [$this->config['project_name'], (int) $id])->current();
         if (null === $row) {
             return false;
         }
@@ -1194,7 +1191,7 @@ HAVING PhraseLocaleCount < ?";
             $this->config['phrases_table_name'],
             $retire ? 'UTC_TIMESTAMP()' : 'NULL'
         );
-        $this->adapter->query($sql, [$row['translation_phrase_id']]);
+        $this->adapter->execute($sql, [$row['translation_phrase_id']]);
 
         $this->recordPhraseEvent(
             $row,
@@ -1255,7 +1252,7 @@ HAVING PhraseLocaleCount < ?";
             . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             $history
         );
-        $this->adapter->query($sql, [
+        $this->adapter->execute($sql, [
             $phraseRow['project'],
             $phraseRow['phrase_hash'],
             self::PHRASE_EVENT_LOCALE,
@@ -1274,7 +1271,7 @@ HAVING PhraseLocaleCount < ?";
     {
         $history = $this->config['translations_history_table_name'] ?? 'trans_translations_history';
         if (! isset($this->historyTableExists)) {
-            $this->historyTableExists = (bool) $this->adapter->query('SHOW TABLES LIKE ?', [$history])->count();
+            $this->historyTableExists = (bool) $this->adapter->select('SHOW TABLES LIKE ?', [$history])->count();
         }
 
         return $this->historyTableExists;
@@ -1429,8 +1426,7 @@ HAVING PhraseLocaleCount < ?";
             return 0;
         }
 
-        $sql    = new Sql($this->adapter);
-        $update = $sql->update($this->config['phrases_table_name'])
+        $update = (new Update($this->config['phrases_table_name']))
             ->set(['retired_on' => $retiredOn])
             //project-scoped for the same reason deletePhrase() is: an id alone
             //addresses a table three applications share
@@ -1438,7 +1434,7 @@ HAVING PhraseLocaleCount < ?";
                 'translation_phrase_id' => $ids,
                 'project'               => $this->config['project_name'],
             ]);
-        $affected = $sql->prepareStatementForSqlObject($update)->execute()->getAffectedRows();
+        $affected = $this->adapter->execute($update);
 
         $this->invalidatePhraseCaches();
 
@@ -1531,20 +1527,19 @@ HAVING PhraseLocaleCount < ?";
         //another application suppressed the insert of this project's own copy, and
         //that phrase stayed permanently untranslatable here. It also explains the size
         //this item used to reach: the measurement was across all projects.
-        $sql    = new Sql($this->adapter);
-        $select = $sql->select($this->config['phrases_table_name'])
+        $select = (new Select($this->config['phrases_table_name']))
             ->columns([
                 'text_domain',
                 //hex here rather than bin2hex() in PHP so nothing binary crosses the
                 //driver; the column is BINARY(32) and some drivers hand back raw
                 //bytes in ways that do not survive a JSON-serializing cache.
-                'hex_hash' => new \Laminas\Db\Sql\Expression('LOWER(HEX(`phrase_hash`))'),
+                'hex_hash' => new \SionModel\Db\Sql\Expression('LOWER(HEX(`phrase_hash`))'),
                 'retired_on',
             ])
             ->where(['project' => $this->config['project_name']]);
 
         $return = [];
-        foreach ($sql->prepareStatementForSqlObject($select)->execute() as $row) {
+        foreach ($this->adapter->select($select) as $row) {
             $return[$row['text_domain']][(string) $row['hex_hash']] = null !== $row['retired_on'];
         }
 
@@ -1678,7 +1673,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
      *
      * @param string|null $routeName recorded on new phrases as the place they were
      *        first seen, which is the only clue a translator gets about context
-     * @return \Laminas\Db\Adapter\Driver\ResultInterface[]
+     * @return list<int> rows affected, one entry per translation row inserted
      */
     public function flush($routeName = null)
     {
@@ -1903,7 +1898,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
     /**
      * Check the TranslationTable object for new missing translations and write them to the database to be translated
      * @param string $routeName
-     * @return \Laminas\Db\Adapter\Driver\ResultInterface[]
+     * @return list<int> rows affected, one entry per translation row inserted
      */
     public function writeMissingPhrasesToDb($routeName = null)
     {
@@ -1946,7 +1941,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         //if we find something, we'll have to write the php arrays
         $weFoundAPreviousMatch = false;
         $result = [];
-        $connection = $this->adapter->getDriver()->getConnection();
+        $connection = $this->adapter;
         foreach ($this->newMissingPhrases as $textDomain => $phrases) {
             foreach ($phrases as $phrase) {
                 if (! isset($phrase)) {
@@ -2000,7 +1995,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                     //disagreed with what its own hash was taken over is a row nothing
                     //can ever look up again. See PhraseIdentity::normalize(); the only
                     //difference is CRLF, and the catalog answers both spellings.
-                    $lastResult = $this->adapter->query($sql, [
+                    $lastResult = $this->adapter->execute($sql, [
                         $this->config['project_name'],
                         $textDomain,
                         PhraseIdentity::normalize($phrase),
@@ -2008,7 +2003,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                         $dateString,
                         $routeName,
                     ]);
-                    $phrasesKeyId = $lastResult->getGeneratedValue();
+                    $phrasesKeyId = $this->adapter->lastInsertId();
                     $result[] = $lastResult;
 
                     //see if we have a matching phrase in another text domain
@@ -2073,7 +2068,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                             . 'ON DUPLICATE KEY UPDATE `translation` = `translation`',
                             $this->config['translations_table_name']
                         );
-                        $result[] = $this->adapter->query($sql, [
+                        $result[] = $this->adapter->execute($sql, [
                             $row['translation_phrase_id'],
                             $row['locale'],
                             $row['translation'],
@@ -2088,7 +2083,7 @@ ORDER BY `locale`, `text_domain`, `phrase`";
                     //fatal, and flush()'s laminas caller already treats an exception
                     //here as a page failure. What this guarantees is only that the
                     //database is left as it was, so the next request can try again.
-                    $connection->rollback();
+                    $connection->rollBack();
                     throw $e;
                 }
             }
@@ -2171,33 +2166,24 @@ ORDER BY `locale`, `text_domain`, `phrase`";
         if (! isset($where) && ! isset($sql)) {
             throw new \InvalidArgumentException('No query requested.');
         }
-        //$where is handed to TableGateway::select() as a predicate. A Sql or Select
-        //object is not one, and the gateway does not complain — it ignores the
-        //argument and returns the entire table. getPhraseIndex() did exactly that for
-        //years, unscoped and unfiltered, and nothing failed loudly enough to notice.
-        //Refusing it here is what makes the next occurrence a stack trace instead of a
-        //quiet cross-project data leak.
-        if (isset($where) && ($where instanceof Sql || $where instanceof \Laminas\Db\Sql\Select)) {
+        //$where is handed to TableGateway::select() as a predicate. A Select is not one,
+        //and laminas-db's gateway did not complain — it ignored the argument and returned
+        //the entire table. getPhraseIndex() did exactly that for years, unscoped and
+        //unfiltered, and nothing failed loudly enough to notice. `TableGateway::select()`
+        //now types its argument, so this can no longer happen silently; the check stays
+        //because this method's own signature is still untyped and it is the one that gets
+        //called with whatever a caller has to hand.
+        if (isset($where) && $where instanceof Select) {
             throw new \InvalidArgumentException(
-                'fetchSome() takes a predicate, not a Sql or Select object. Build the Select and run it '
-                . 'with Sql::prepareStatementForSqlObject()->execute(); passing it here silently returns '
-                . 'the whole table.'
+                'fetchSome() takes a predicate, not a Select. Build the Select and run it through the '
+                . 'connection; passing it here used to return the whole table.'
             );
         }
-        if (isset($sql)) {
-            if (! isset($sqlArgs)) {
-                $sqlArgs = Adapter::QUERY_MODE_EXECUTE; //make sure query executes
-            }
-            $result = $this->adapter->query($sql, $sqlArgs);
-        } else {
-            $result = $gateway->select($where);
-        }
+        $result = isset($sql)
+            ? $this->adapter->select($sql, is_array($sqlArgs) ? $sqlArgs : [])
+            : $gateway->select($where);
 
-        $return = [];
-        foreach ($result as $row) {
-            $return[] = $row;
-        }
-        return $return;
+        return $result->toArray();
     }
 
     public static function getLocaleNames()

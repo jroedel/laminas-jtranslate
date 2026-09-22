@@ -8,8 +8,8 @@ use JTranslate\Cache\PhraseCache;
 use JTranslate\Model\TranslationsTable;
 use JTranslate\Service\Adapter\CallableActingUserProvider;
 use JTranslate\Service\Adapter\CallableUserDirectory;
-use Laminas\Db\Adapter\Adapter;
-use Laminas\Db\TableGateway\TableGateway;
+use SionModel\Db\Connection;
+use SionModel\Db\TableGateway;
 use Psr\Container\ContainerInterface;
 
 use function getcwd;
@@ -48,8 +48,8 @@ class TranslationsTableFactory
         $requestedName = TranslationsTable::class,
         ?array $options = null
     ): TranslationsTable {
-        /** @var Adapter $adapter */
-        $adapter = $container->get(Adapter::class);
+        /** @var Connection $adapter */
+        $adapter = $container->get(Connection::class);
         /** @var array<string, mixed> $config */
         $config = $container->get('JTranslate\Config');
 
