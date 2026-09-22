@@ -2,7 +2,6 @@
 
 namespace JTranslate\Service;
 
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 use JTranslate\Model\CountriesInfo;
 use RuntimeException;
@@ -12,7 +11,7 @@ use RuntimeException;
  *
  * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
-class CountriesFactory implements FactoryInterface
+class CountriesFactory
 {
     /**
      * Create an object

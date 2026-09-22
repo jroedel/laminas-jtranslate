@@ -7,7 +7,6 @@ namespace JTranslate\Service;
 use JTranslate\Form\PhraseValidator;
 use JTranslate\Model\TranslationsTable;
 use Laminas\Db\Adapter\Adapter;
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
 use function array_keys;
@@ -27,7 +26,7 @@ use function is_string;
  * `Adapter::class` and not `AdapterInterface::class`: applications register the
  * concrete class and nothing here aliases the interface.
  */
-class PhraseValidatorFactory implements FactoryInterface
+class PhraseValidatorFactory
 {
     /**
      * @param string $requestedName

@@ -6,10 +6,9 @@ namespace JTranslate\Service;
 
 use JTranslate\Console\Command\ExportCatalogsCommand;
 use JTranslate\Model\TranslationsTable;
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
-class ExportCatalogsCommandFactory implements FactoryInterface
+class ExportCatalogsCommandFactory
 {
     /**
      * @param string $requestedName

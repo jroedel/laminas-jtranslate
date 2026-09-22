@@ -6,10 +6,9 @@ namespace JTranslate\Service;
 
 use JTranslate\Console\Command\RetirePhrasesCommand;
 use JTranslate\Model\TranslationsTable;
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
-class RetirePhrasesCommandFactory implements FactoryInterface
+class RetirePhrasesCommandFactory
 {
     /**
      * @param string $requestedName

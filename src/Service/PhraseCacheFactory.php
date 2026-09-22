@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace JTranslate\Service;
 
 use JTranslate\Cache\PhraseCache;
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 use Psr\SimpleCache\CacheInterface;
 
@@ -29,7 +28,7 @@ use function is_string;
  * per-request memory either way, so the module works and merely re-reads the phrase index
  * once per request.
  */
-class PhraseCacheFactory implements FactoryInterface
+class PhraseCacheFactory
 {
     /**
      * @param string $requestedName

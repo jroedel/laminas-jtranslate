@@ -9,7 +9,6 @@
 
 namespace JTranslate\Service;
 
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -17,7 +16,7 @@ use Psr\Container\ContainerInterface;
  *
  * @author Marco Pivetta <ocramius@gmail.com>
  */
-class ConfigServiceFactory implements FactoryInterface
+class ConfigServiceFactory
 {
     /**
      * Create an object

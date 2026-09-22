@@ -3,7 +3,6 @@
 namespace JTranslate\Service;
 
 use Laminas\Db\Adapter\Adapter;
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 use JTranslate\Model\TranslationsTable;
 use JTranslate\Form\EditPhraseForm;
@@ -13,7 +12,7 @@ use JTranslate\Form\EditPhraseForm;
  *
  * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
-class EditPhraseFormFactory implements FactoryInterface
+class EditPhraseFormFactory
 {
     /**
      * Create an object

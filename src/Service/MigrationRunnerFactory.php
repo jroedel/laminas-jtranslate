@@ -6,10 +6,9 @@ namespace JTranslate\Service;
 
 use JTranslate\Migration\MigrationRunner;
 use Laminas\Db\Adapter\Adapter;
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
-class MigrationRunnerFactory implements FactoryInterface
+class MigrationRunnerFactory
 {
     /**
      * @param string $requestedName
