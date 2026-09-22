@@ -10,7 +10,6 @@ use JTranslate\Service\Adapter\CallableActingUserProvider;
 use JTranslate\Service\Adapter\CallableUserDirectory;
 use Laminas\Db\Adapter\Adapter;
 use Laminas\Db\TableGateway\TableGateway;
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
 use function getcwd;
@@ -28,7 +27,7 @@ use function is_string;
  *
  * @author Jeff Roedel <jeff.roedel@schoenstatt-fathers.org>
  */
-class TranslationsTableFactory implements FactoryInterface
+class TranslationsTableFactory
 {
     /**
      * Service ids resolved reflectively so that a deployment without SionModel or

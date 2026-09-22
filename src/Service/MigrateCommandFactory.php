@@ -6,10 +6,9 @@ namespace JTranslate\Service;
 
 use JTranslate\Console\Command\MigrateCommand;
 use JTranslate\Migration\MigrationRunner;
-use Laminas\ServiceManager\Factory\FactoryInterface;
 use Psr\Container\ContainerInterface;
 
-class MigrateCommandFactory implements FactoryInterface
+class MigrateCommandFactory
 {
     /**
      * @param string $requestedName
